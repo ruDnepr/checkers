@@ -206,7 +206,9 @@ jobs:
           exit ${status:-0}
   android-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Boot (10 min) + one warm-up build (10 min) + four bounded test runs must
+    # all fit inside this, otherwise the runner cancels the job at the cap.
+    timeout-minutes: 50
     # Hosted runners sometimes hand out a machine without working KVM and the
     # emulator never boots. The job is advisory: it publishes the device log in
     # the check annotations, but builds, analysis and tests stay the gate.
