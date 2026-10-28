@@ -68,8 +68,10 @@ void main() {
     expect(find.text('Играть снова'), findsOneWidget);
 
     await tester.tap(find.text('В меню'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    for (var frame = 0; frame < 20; frame++) {
+      if (find.byType(GamePage).evaluate().isEmpty) break;
+      await tester.pump(const Duration(milliseconds: 100));
+    }
 
     expect(find.byType(GamePage), findsNothing);
     expect(find.text('Старт'), findsOneWidget);
