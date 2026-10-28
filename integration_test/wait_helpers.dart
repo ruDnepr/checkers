@@ -1,4 +1,5 @@
 import 'package:checkers_for_diana/application/game_controller.dart';
+import 'package:checkers_for_diana/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Device runs are slow: wait for a condition by pumping real frames instead of
