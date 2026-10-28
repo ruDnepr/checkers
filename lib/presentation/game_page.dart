@@ -236,8 +236,9 @@ class _GamePageState extends State<GamePage> {
       ),
     );
     if (!mounted || yes != true) return;
-    if (widget.setup.mode == GameMode.network && controller.winner == null)
+    if (widget.setup.mode == GameMode.network && controller.winner == null) {
       controller.resign();
+    }
     _goHome();
   }
 
@@ -483,8 +484,9 @@ class _GamePageState extends State<GamePage> {
   );
 
   String _nameFor(Side side) {
-    if (widget.setup.mode == GameMode.local)
+    if (widget.setup.mode == GameMode.local) {
       return side == widget.setup.playerSide ? 'Игрок 1' : 'Игрок 2';
+    }
     if (side == widget.setup.playerSide) return widget.settings.nickname;
     if (widget.setup.mode == GameMode.computer) return 'Компьютер';
     final network = widget.setup.network!;

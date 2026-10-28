@@ -203,8 +203,9 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
           (entry.key == preview.from ||
               preview.captures
                   .take(game.selectedPath.length)
-                  .contains(entry.key)))
+                  .contains(entry.key))) {
         continue;
+      }
       _piece(canvas, _center(entry.key, n, cell), cell, entry.value);
     }
     if (preview != null) {
@@ -214,8 +215,9 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
               game.state.variant == GameVariant.giveaway) &&
           game.selectedPath.any(
             (p) => p.row == (moving.side == Side.white ? 0 : n - 1),
-          ))
+          )) {
         moving = moving.crown();
+      }
       _piece(canvas, _center(game.selectedPath.last, n, cell), cell, moving);
     }
   }
@@ -330,6 +332,7 @@ class BoardView extends StatefulWidget {
 
 class _BoardViewState extends State<BoardView> {
   late final DianaBoardGame game = DianaBoardGame(flipped: widget.flipped);
+  final gameKey = GlobalKey<RiverpodAwareGameWidgetState<DianaBoardGame>>();
   @override
   Widget build(BuildContext context) => AspectRatio(
     aspectRatio: 1,
@@ -353,7 +356,10 @@ class _BoardViewState extends State<BoardView> {
         },
         child: ClipRRect(
           borderRadius: BorderRadius.circular(5),
-          child: RiverpodAwareGameWidget(game: game),
+          child: RiverpodAwareGameWidget<DianaBoardGame>(
+            key: gameKey,
+            game: game,
+          ),
         ),
       ),
     ),

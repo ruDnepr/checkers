@@ -41,8 +41,9 @@ class CheckersAI {
       final next = rules.applyKnownLegal(state, move);
       var score = _search(next, rules, depth - 1, alpha, double.infinity, root);
       // A little variety only affects the easy opponent, never a requested hint.
-      if (easyNoise && score.abs() < 100000)
+      if (easyNoise && score.abs() < 100000) {
         score += (_random.nextDouble() - 0.5) * 0.5;
+      }
       if (score > bestScore) {
         bestScore = score;
         best = move;

@@ -112,7 +112,6 @@ class PageFrame extends StatelessWidget {
   final Widget? trailing;
   @override
   Widget build(BuildContext context) => Scaffold(
-    extendBodyBehindAppBar: true,
     appBar: AppBar(
       title: Text(title),
       actions: trailing == null ? null : [trailing!, const SizedBox(width: 12)],

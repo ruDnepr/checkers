@@ -82,8 +82,11 @@ class StandardRules implements GameRules {
   ) {
     var found = false;
     for (final (dr, dc) in _directions) {
-      if (!piece.king && !variant.backwardsCapture && dr != piece.side.forward)
+      if (!piece.king &&
+          !variant.backwardsCapture &&
+          dr != piece.side.forward) {
         continue;
+      }
       var row = current.row + dr;
       var col = current.col + dc;
       if (piece.king && variant.flyingKings) {

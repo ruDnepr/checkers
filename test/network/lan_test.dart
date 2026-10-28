@@ -73,7 +73,7 @@ void main() {
         network: client,
       ),
       settings,
-      animationPerLanding: Duration.zero,
+      animationPerLanding: const Duration(milliseconds: 300),
     );
     addTearDown(() {
       a.dispose();
@@ -85,6 +85,7 @@ void main() {
     a.tap(const Square(4, 1));
     await waitFor(b, () => b.state.ply == 1);
     expect(a.state.fingerprint, b.state.fingerprint);
+    expect(b.isAnimating, isTrue);
     expect(a.canUndo, isTrue);
     a.undo();
     await waitFor(b, () => b.incomingUndoPly != null);

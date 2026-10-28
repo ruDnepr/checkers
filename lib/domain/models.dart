@@ -153,10 +153,12 @@ class Board {
     for (var row = 0; row < size; row++) {
       for (var col = 0; col < size; col++) {
         if ((row + col).isEven) continue;
-        if (row < variant.initialRows)
+        if (row < variant.initialRows) {
           result[Square(row, col)] = const Piece(Side.black);
-        if (row >= size - variant.initialRows)
+        }
+        if (row >= size - variant.initialRows) {
           result[Square(row, col)] = const Piece(Side.white);
+        }
       }
     }
     return Board(size, result);

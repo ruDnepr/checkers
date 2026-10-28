@@ -82,8 +82,9 @@ class NetworkMessage {
   String encode() => jsonEncode({'type': type, 'data': data});
 
   factory NetworkMessage.decode(Object? text) {
-    if (text is! String || text.length > 16384)
+    if (text is! String || text.length > 16384) {
       throw const FormatException('Некорректное сообщение');
+    }
     final decoded = jsonDecode(text);
     if (decoded is! Map ||
         decoded['type'] is! String ||

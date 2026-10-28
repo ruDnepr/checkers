@@ -84,8 +84,9 @@ class NetworkGameService extends ChangeNotifier {
       final nameBytes = service.txt?['name'];
       if (nameBytes != null) {
         final decoded = utf8.decode(nameBytes, allowMalformed: true).trim();
-        if (decoded.isNotEmpty)
+        if (decoded.isNotEmpty) {
           name = decoded.length > 40 ? decoded.substring(0, 40) : decoded;
+        }
       }
       result.add(
         DiscoveredGame(
@@ -104,8 +105,9 @@ class NetworkGameService extends ChangeNotifier {
     bool advertise = true,
     InternetAddress? bindAddress,
   }) async {
-    if (status != NetworkStatus.idle || !isGameCode(game.code))
+    if (status != NetworkStatus.idle || !isGameCode(game.code)) {
       throw StateError('Нельзя создать игру');
+    }
     isHost = true;
     config = game;
     _server = await shelf_io.serve(
@@ -291,8 +293,9 @@ class NetworkGameService extends ChangeNotifier {
   }
 
   void send(NetworkMessage message) {
-    if (status != NetworkStatus.connected || !_handshake)
+    if (status != NetworkStatus.connected || !_handshake) {
       throw StateError('Связь потеряна');
+    }
     _sendRaw(message);
   }
 

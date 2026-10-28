@@ -88,6 +88,7 @@ class GameController extends ChangeNotifier {
   bool hintThinking = false;
   bool waitingForUndo = false;
   int? incomingUndoPly;
+  int? _deferredUndoPly;
   String? notice;
   String? fatalMessage;
   Side? _resignedWinner;
@@ -109,6 +110,7 @@ class GameController extends ChangeNotifier {
       !computerThinking &&
       !waitingForUndo &&
       incomingUndoPly == null &&
+      _deferredUndoPly == null &&
       (setup.mode == GameMode.local || state.turn == setup.playerSide);
   bool get hasCapture => legalMoves.isNotEmpty && legalMoves.first.isCapture;
   int get maximumCapture => hasCapture ? legalMoves.first.captures.length : 0;
@@ -118,8 +120,10 @@ class GameController extends ChangeNotifier {
         isAnimating ||
         waitingForUndo ||
         incomingUndoPly != null ||
-        fatalMessage != null)
+        _deferredUndoPly != null ||
+        fatalMessage != null) {
       return false;
+    }
     if (setup.mode == GameMode.network) {
       return setup.network?.status == NetworkStatus.connected &&
           _history.last.turn == setup.playerSide &&
@@ -136,8 +140,9 @@ class GameController extends ChangeNotifier {
   List<Move> get selectedCandidates {
     if (selected == null) return [];
     return legalMoves.where((move) {
-      if (move.from != selected || move.landings.length < _prefix.length)
+      if (move.from != selected || move.landings.length < _prefix.length) {
         return false;
+      }
       for (var i = 0; i < _prefix.length; i++) {
         if (move.landings[i] != _prefix[i]) return false;
       }
@@ -153,8 +158,9 @@ class GameController extends ChangeNotifier {
   void start() {
     if (_started) return;
     _started = true;
-    if (setup.mode == GameMode.computer && state.turn != setup.playerSide)
+    if (setup.mode == GameMode.computer && state.turn != setup.playerSide) {
       _startComputer();
+    }
   }
 
   void _refresh() => legalMoves = rules.legalMoves(state);
@@ -246,6 +252,10 @@ class GameController extends ChangeNotifier {
     if (duration > Duration.zero) await Future<void>.delayed(duration);
     if (_disposed || generation != _generation) return;
     animation = null;
+    if (_deferredUndoPly != null) {
+      incomingUndoPly = _deferredUndoPly;
+      _deferredUndoPly = null;
+    }
     if (!remote && setup.mode == GameMode.network) {
       try {
         setup.network!.send(
@@ -261,13 +271,18 @@ class GameController extends ChangeNotifier {
     }
     _notify();
     if (winner != null || fatalMessage != null) return;
-    if (setup.mode == GameMode.computer && state.turn != setup.playerSide)
+    if (setup.mode == GameMode.computer && state.turn != setup.playerSide) {
       _startComputer();
+    }
   }
 
   void _startComputer() {
-    if (_disposed || computerThinking || winner != null || fatalMessage != null)
+    if (_disposed ||
+        computerThinking ||
+        winner != null ||
+        fatalMessage != null) {
       return;
+    }
     computerThinking = true;
     final generation = _generation;
     final snapshot = state;
@@ -284,8 +299,9 @@ class GameController extends ChangeNotifier {
         );
         if (_disposed ||
             generation != _generation ||
-            snapshot.fingerprint != state.fingerprint)
+            snapshot.fingerprint != state.fingerprint) {
           return;
+        }
         if (move != null) await _apply(move, remote: false);
       } catch (_) {
         if (!_disposed && generation == _generation) {
@@ -318,8 +334,9 @@ class GameController extends ChangeNotifier {
     }
     var count = 1;
     if (setup.mode == GameMode.computer &&
-        _history.last.turn != setup.playerSide)
+        _history.last.turn != setup.playerSide) {
       count = 2;
+    }
     _restore(count);
   }
 
@@ -335,6 +352,7 @@ class GameController extends ChangeNotifier {
     _resignedWinner = null;
     waitingForUndo = false;
     incomingUndoPly = null;
+    _deferredUndoPly = null;
     suggestedMove = null;
     _clearSelection();
     _refresh();
@@ -389,8 +407,9 @@ class GameController extends ChangeNotifier {
             throw const FormatException('Разные позиции');
           }
           final move = Move.fromJson(message.data['move']);
-          if (!legalMoves.contains(move))
+          if (!legalMoves.contains(move)) {
             throw const FormatException('Недопустимый ход');
+          }
           waitingForUndo =
               false; // A simultaneous answer takes precedence over an undo request.
           unawaited(_apply(move, remote: true));
@@ -404,11 +423,17 @@ class GameController extends ChangeNotifier {
             _history.isNotEmpty &&
             _history.last.turn == setup.playerSide.opponent &&
             state.turn == setup.playerSide &&
-            !isAnimating &&
-            incomingUndoPly == null;
+            incomingUndoPly == null &&
+            _deferredUndoPly == null;
         if (valid) {
-          incomingUndoPly = state.ply;
-          _notify();
+          // The request may arrive while the opponent is still watching the
+          // move animation. Keep the turn locked and ask as soon as it ends.
+          if (isAnimating) {
+            _deferredUndoPly = state.ply;
+          } else {
+            incomingUndoPly = state.ply;
+            _notify();
+          }
         } else {
           try {
             setup.network!.send(
