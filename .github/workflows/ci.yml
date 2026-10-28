@@ -222,5 +222,6 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: ./tool/run_integration.sh

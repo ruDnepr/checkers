@@ -4,12 +4,20 @@
 set -o pipefail
 status=0
 : > /tmp/integration.txt
-for file in integration_test/*_test.dart; do
-  echo "=== $file" >> /tmp/integration.txt
-  # A wedged emulator can leave `flutter test` waiting forever; bound each run.
-  timeout --signal=KILL 420 flutter test "$file" --reporter expanded \
-    >> /tmp/integration.txt 2>&1 || status=1
-done
+if ! timeout 180 adb wait-for-device; then
+  echo 'Эмулятор не подключился к adb' >> /tmp/integration.txt
+  status=1
+elif [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; then
+  echo 'Эмулятор не закончил загрузку' >> /tmp/integration.txt
+  status=1
+else
+  for file in integration_test/*_test.dart; do
+    echo "=== $file" >> /tmp/integration.txt
+    # A wedged emulator can leave `flutter test` waiting forever; bound each run.
+    timeout --signal=KILL 240 flutter test "$file" --reporter expanded \
+      >> /tmp/integration.txt 2>&1 || status=1
+  done
+fi
 cat /tmp/integration.txt
 
 # A device run can die without printing a Dart error. Collect the Android side
