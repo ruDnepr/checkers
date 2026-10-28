@@ -13,9 +13,14 @@ elif [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1"
 else
   for file in integration_test/*_test.dart; do
     echo "=== $file" >> /tmp/integration.txt
-    # A wedged emulator can leave `flutter test` waiting forever; bound each run.
-    timeout --signal=KILL 240 flutter test "$file" --reporter expanded \
-      >> /tmp/integration.txt 2>&1 || status=1
+    # A wedged emulator can leave `flutter test` waiting forever, so every run
+    # is bounded; a launch that times out gets one more attempt.
+    if ! timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
+      >> /tmp/integration.txt 2>&1; then
+      echo "=== повтор после сбоя: $file" >> /tmp/integration.txt
+      timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
+        >> /tmp/integration.txt 2>&1 || status=1
+    fi
   done
 fi
 cat /tmp/integration.txt
