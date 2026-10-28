@@ -154,6 +154,34 @@ void main() {
     expect(moves.single.to, const Square(3, 6));
   });
 
+  test('в международных шашках из равных серий игрок выбирает любую', () {
+    final state = position(GameVariant.international, {
+      const Square(7, 0): white,
+      const Square(6, 1): black,
+      const Square(4, 1): black,
+      const Square(4, 3): black,
+    });
+    final moves = InternationalRules().legalMoves(state);
+    expect(moves, hasLength(2));
+    expect(moves.every((m) => m.captures.length == 2), isTrue);
+    expect(
+      moves.map((m) => m.to).toSet(),
+      {const Square(3, 0), const Square(3, 4)},
+    );
+  });
+
+  test('в поддавках бой тоже обязателен', () {
+    final state = position(GameVariant.giveaway, {
+      const Square(5, 0): white,
+      const Square(4, 1): black,
+      const Square(7, 6): white,
+    });
+    final moves = GiveawayRules().legalMoves(state);
+    expect(moves, hasLength(1));
+    expect(moves.single.isCapture, isTrue);
+    expect(moves.single.to, const Square(3, 2));
+  });
+
   test('в международных шашках проход через последнюю линию не даёт дамку', () {
     final state = position(GameVariant.international, {
       const Square(2, 1): white,
