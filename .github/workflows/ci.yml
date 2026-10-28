@@ -1,6 +1,9 @@
 name: Flutter
 on:
+  # Pull requests are the review path; running both events for the same commit
+  # doubled the emulator jobs and starved the runners.
   push:
+    branches: [main]
   pull_request:
 
 jobs:

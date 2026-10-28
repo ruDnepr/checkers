@@ -6,7 +6,9 @@ status=0
 : > /tmp/integration.txt
 for file in integration_test/*_test.dart; do
   echo "=== $file" >> /tmp/integration.txt
-  flutter test "$file" --reporter expanded >> /tmp/integration.txt 2>&1 || status=1
+  # A wedged emulator can leave `flutter test` waiting forever; bound each run.
+  timeout --signal=KILL 420 flutter test "$file" --reporter expanded \
+    >> /tmp/integration.txt 2>&1 || status=1
 done
 cat /tmp/integration.txt
 
