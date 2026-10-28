@@ -212,7 +212,12 @@ jobs:
           fi
           exit ${status:-0}
   android-integration:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    # Also runs for a commit whose message contains [device], which makes a
+    # one-off device check possible without waiting for the nightly run.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      contains(github.event.head_commit.message, '[device]')
     runs-on: ubuntu-latest
     # Boot (10 min) + one warm-up build (10 min) + four bounded test runs must
     # all fit inside this, otherwise the runner cancels the job at the cap.
