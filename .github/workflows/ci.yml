@@ -11,7 +11,46 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
       - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
+      - name: Analyze
+        shell: bash
+        run: |
+          flutter analyze --no-pub --machine > /tmp/analyze.txt || status=$?
+          cat /tmp/analyze.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          for line in Path('/tmp/analyze.txt').read_text().splitlines():
+              parts = line.split('|', 7)
+              if len(parts) == 8:
+                  severity, _, _, path, line_no, col, _, message = parts
+                  if severity in ('ERROR', 'WARNING', 'INFO'):
+                      print(f'::{"error" if severity == "ERROR" else "warning"} file={path},line={line_no},col={col}::{message}')
+          PY
+          exit ${status:-0}
+      - name: Test
+        shell: bash
+        run: |
+          flutter test --reporter expanded > /tmp/tests.txt 2>&1 || status=$?
+          cat /tmp/tests.txt
+          if [ -n "$status" ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          text = Path('/tmp/tests.txt').read_text()
+          for block in text.split('[E]')[1:]:
+              print('::error::' + block[:7000].replace('%','%25').replace('\n','%0A').replace('\r','%0D'))
+          PY
+          fi
+          exit ${status:-0}
+      # Bootstrap native projects from the official Flutter template; removed once checked in.
+      - name: Export Flutter native templates
+        if: always()
+        shell: bash
+        run: |
+          flutter create --no-pub --platforms=android,ios --org ru.dnepr --project-name checkers_for_diana /tmp/scaffold
+          tar czf /tmp/native.tgz -C /tmp/scaffold android ios
+          python3 - <<'PY'
+          import base64
+          data=base64.b64encode(open('/tmp/native.tgz','rb').read()).decode()
+          for i in range(0, len(data), 12000):
+              print(f'::notice title=scaffold-{i//12000:04d}::{data[i:i+12000]}')
+          PY
