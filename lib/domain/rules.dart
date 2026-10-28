@@ -34,8 +34,14 @@ class StandardRules implements GameRules {
     for (final entry in state.board.pieces.entries) {
       if (entry.value.side != state.turn) continue;
       _findCaptures(
-        Map.of(state.board.pieces), state.board.size, entry.key, entry.key,
-        entry.value, <Square>[], <Square>[], captures,
+        Map.of(state.board.pieces),
+        state.board.size,
+        entry.key,
+        entry.key,
+        entry.value,
+        <Square>[],
+        <Square>[],
+        captures,
       );
     }
     if (captures.isNotEmpty) {
@@ -65,41 +71,72 @@ class StandardRules implements GameRules {
   }
 
   void _findCaptures(
-    Map<Square, Piece> board, int size, Square origin, Square current, Piece piece,
-    List<Square> path, List<Square> taken, List<Move> result,
+    Map<Square, Piece> board,
+    int size,
+    Square origin,
+    Square current,
+    Piece piece,
+    List<Square> path,
+    List<Square> taken,
+    List<Move> result,
   ) {
     var found = false;
     for (final (dr, dc) in _directions) {
-      if (!piece.king && !variant.backwardsCapture && dr != piece.side.forward) continue;
+      if (!piece.king && !variant.backwardsCapture && dr != piece.side.forward)
+        continue;
       var row = current.row + dr;
       var col = current.col + dc;
       if (piece.king && variant.flyingKings) {
-        while (Square(row, col).inside(size) && board[Square(row, col)] == null) {
-          row += dr; col += dc;
+        while (Square(row, col).inside(size) &&
+            board[Square(row, col)] == null) {
+          row += dr;
+          col += dc;
         }
       }
       final victim = Square(row, col);
       final target = board[victim];
-      if (!victim.inside(size) || target == null || target.side == piece.side || taken.contains(victim)) {
+      if (!victim.inside(size) ||
+          target == null ||
+          target.side == piece.side ||
+          taken.contains(victim)) {
         continue;
       }
-      row += dr; col += dc;
+      row += dr;
+      col += dc;
       while (Square(row, col).inside(size) && board[Square(row, col)] == null) {
         found = true;
         final landing = Square(row, col);
         final promotes = !piece.king && _isCrownRow(landing, piece.side, size);
-        final nextPiece = promotes && (variant == GameVariant.russian || variant == GameVariant.giveaway)
-            ? piece.crown() : piece;
-        final nextBoard = Map<Square, Piece>.of(board)..remove(current)..[landing] = nextPiece;
+        final nextPiece =
+            promotes &&
+                (variant == GameVariant.russian ||
+                    variant == GameVariant.giveaway)
+            ? piece.crown()
+            : piece;
+        final nextBoard = Map<Square, Piece>.of(board)
+          ..remove(current)
+          ..[landing] = nextPiece;
         final nextPath = [...path, landing];
         final nextTaken = [...taken, victim];
         if (promotes && variant == GameVariant.american) {
-          result.add(Move(from: origin, landings: nextPath, captures: nextTaken));
+          result.add(
+            Move(from: origin, landings: nextPath, captures: nextTaken),
+          );
         } else {
-          _findCaptures(nextBoard, size, origin, landing, nextPiece, nextPath, nextTaken, result);
+          _findCaptures(
+            nextBoard,
+            size,
+            origin,
+            landing,
+            nextPiece,
+            nextPath,
+            nextTaken,
+            result,
+          );
         }
         if (!piece.king || !variant.flyingKings) break;
-        row += dr; col += dc;
+        row += dr;
+        col += dc;
       }
     }
     if (!found && taken.isNotEmpty) {
@@ -120,16 +157,24 @@ class StandardRules implements GameRules {
   GameState applyKnownLegal(GameState state, Move move) {
     final pieces = Map<Square, Piece>.of(state.board.pieces);
     var piece = pieces.remove(move.from)!;
-    for (final captured in move.captures) { pieces.remove(captured); }
-    final wasRussianPromotion = variant == GameVariant.russian || variant == GameVariant.giveaway;
+    for (final captured in move.captures) {
+      pieces.remove(captured);
+    }
+    final wasRussianPromotion =
+        variant == GameVariant.russian || variant == GameVariant.giveaway;
     if (_isCrownRow(move.to, piece.side, state.board.size) ||
-        (wasRussianPromotion && move.landings.any((p) => _isCrownRow(p, piece.side, state.board.size)))) {
+        (wasRussianPromotion &&
+            move.landings.any(
+              (p) => _isCrownRow(p, piece.side, state.board.size),
+            ))) {
       piece = piece.crown();
     }
     pieces[move.to] = piece;
     return GameState(
-      variant: variant, board: Board(state.board.size, pieces),
-      turn: state.turn.opponent, ply: state.ply + 1,
+      variant: variant,
+      board: Board(state.board.size, pieces),
+      turn: state.turn.opponent,
+      ply: state.ply + 1,
     );
   }
 
@@ -142,7 +187,18 @@ class StandardRules implements GameRules {
   }
 }
 
-class RussianRules extends StandardRules { const RussianRules() : super(GameVariant.russian); }
-class AmericanRules extends StandardRules { const AmericanRules() : super(GameVariant.american); }
-class InternationalRules extends StandardRules { const InternationalRules() : super(GameVariant.international); }
-class GiveawayRules extends StandardRules { const GiveawayRules() : super(GameVariant.giveaway); }
+class RussianRules extends StandardRules {
+  const RussianRules() : super(GameVariant.russian);
+}
+
+class AmericanRules extends StandardRules {
+  const AmericanRules() : super(GameVariant.american);
+}
+
+class InternationalRules extends StandardRules {
+  const InternationalRules() : super(GameVariant.international);
+}
+
+class GiveawayRules extends StandardRules {
+  const GiveawayRules() : super(GameVariant.giveaway);
+}

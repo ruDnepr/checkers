@@ -20,24 +20,38 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> setHints(bool value) async {
-    hints = value; notifyListeners(); await _preferences?.setBool('hints', value);
+    hints = value;
+    notifyListeners();
+    await _preferences?.setBool('hints', value);
   }
+
   Future<void> setSound(bool value) async {
-    sound = value; notifyListeners(); await _preferences?.setBool('sound', value);
+    sound = value;
+    notifyListeners();
+    await _preferences?.setBool('sound', value);
   }
+
   Future<void> setNickname(String value) async {
     final trimmed = value.trim();
-    nickname = trimmed.isEmpty ? 'Диана' : trimmed.substring(0, trimmed.length > 20 ? 20 : trimmed.length);
-    notifyListeners(); await _preferences?.setString('nickname', nickname);
+    nickname = trimmed.isEmpty
+        ? 'Диана'
+        : trimmed.substring(0, trimmed.length > 20 ? 20 : trimmed.length);
+    notifyListeners();
+    await _preferences?.setString('nickname', nickname);
   }
+
   Future<void> recordGame({required bool won}) async {
-    gamesPlayed++; if (won) gamesWon++;
+    gamesPlayed++;
+    if (won) gamesWon++;
     notifyListeners();
     await _preferences?.setInt('gamesPlayed', gamesPlayed);
     await _preferences?.setInt('gamesWon', gamesWon);
   }
+
   Future<void> resetProgress() async {
-    gamesPlayed = 0; gamesWon = 0; notifyListeners();
+    gamesPlayed = 0;
+    gamesWon = 0;
+    notifyListeners();
     await _preferences?.setInt('gamesPlayed', 0);
     await _preferences?.setInt('gamesWon', 0);
   }

@@ -14,8 +14,11 @@ enum GameMode { computer, local, network }
 
 class GameSetup {
   const GameSetup({
-    required this.variant, required this.mode, required this.playerSide,
-    this.difficulty = Difficulty.easy, this.network,
+    required this.variant,
+    required this.mode,
+    required this.playerSide,
+    this.difficulty = Difficulty.easy,
+    this.network,
   });
   final GameVariant variant;
   final GameMode mode;
@@ -44,14 +47,20 @@ class _SearchRequest {
   final bool noise;
 }
 
-Move? _searchMove(_SearchRequest request) =>
-    CheckersAI().findBestMove(request.state, request.depth, easyNoise: request.noise);
+Move? _searchMove(_SearchRequest request) => CheckersAI().findBestMove(
+  request.state,
+  request.depth,
+  easyNoise: request.noise,
+);
 
 class GameController extends ChangeNotifier {
-  GameController(this.setup, this.settings, {this.animationPerLanding = const Duration(milliseconds: 350)})
-      : state = GameState.initial(setup.variant),
-        rules = GameRules.forVariant(setup.variant) as StandardRules,
-        sounds = GameSounds(settings) {
+  GameController(
+    this.setup,
+    this.settings, {
+    this.animationPerLanding = const Duration(milliseconds: 350),
+  }) : state = GameState.initial(setup.variant),
+       rules = GameRules.forVariant(setup.variant) as StandardRules,
+       sounds = GameSounds(settings) {
     if (setup.mode == GameMode.network && setup.network == null) {
       throw ArgumentError('Для сетевой игры необходимо соединение');
     }
@@ -87,23 +96,39 @@ class GameController extends ChangeNotifier {
   bool _disposed = false;
   bool _started = false;
 
-  Side? get winner => _resignedWinner ?? (legalMoves.isEmpty || state.board.count(state.turn) == 0
-      ? (state.variant.reverseGoal ? state.turn : state.turn.opponent) : null);
+  Side? get winner =>
+      _resignedWinner ??
+      (legalMoves.isEmpty || state.board.count(state.turn) == 0
+          ? (state.variant.reverseGoal ? state.turn : state.turn.opponent)
+          : null);
   bool get isAnimating => animation != null;
-  bool get canInteract => winner == null && fatalMessage == null && !isAnimating && !computerThinking &&
-      !waitingForUndo && incomingUndoPly == null &&
+  bool get canInteract =>
+      winner == null &&
+      fatalMessage == null &&
+      !isAnimating &&
+      !computerThinking &&
+      !waitingForUndo &&
+      incomingUndoPly == null &&
       (setup.mode == GameMode.local || state.turn == setup.playerSide);
   bool get hasCapture => legalMoves.isNotEmpty && legalMoves.first.isCapture;
   int get maximumCapture => hasCapture ? legalMoves.first.captures.length : 0;
 
   bool get canUndo {
-    if (_history.isEmpty || isAnimating || waitingForUndo || incomingUndoPly != null || fatalMessage != null) return false;
+    if (_history.isEmpty ||
+        isAnimating ||
+        waitingForUndo ||
+        incomingUndoPly != null ||
+        fatalMessage != null)
+      return false;
     if (setup.mode == GameMode.network) {
-      return setup.network?.status == NetworkStatus.connected && _history.last.turn == setup.playerSide &&
+      return setup.network?.status == NetworkStatus.connected &&
+          _history.last.turn == setup.playerSide &&
           state.turn == setup.playerSide.opponent;
     }
-    if (setup.mode == GameMode.computer && _history.last.turn != setup.playerSide) {
-      return _history.length >= 2 && _history[_history.length - 2].turn == setup.playerSide;
+    if (setup.mode == GameMode.computer &&
+        _history.last.turn != setup.playerSide) {
+      return _history.length >= 2 &&
+          _history[_history.length - 2].turn == setup.playerSide;
     }
     return true;
   }
@@ -111,7 +136,8 @@ class GameController extends ChangeNotifier {
   List<Move> get selectedCandidates {
     if (selected == null) return [];
     return legalMoves.where((move) {
-      if (move.from != selected || move.landings.length < _prefix.length) return false;
+      if (move.from != selected || move.landings.length < _prefix.length)
+        return false;
       for (var i = 0; i < _prefix.length; i++) {
         if (move.landings[i] != _prefix[i]) return false;
       }
@@ -121,12 +147,14 @@ class GameController extends ChangeNotifier {
 
   Set<Square> get suggestedDestinations => selectedCandidates
       .where((m) => m.landings.length > _prefix.length)
-      .map((m) => m.landings[_prefix.length]).toSet();
+      .map((m) => m.landings[_prefix.length])
+      .toSet();
 
   void start() {
     if (_started) return;
     _started = true;
-    if (setup.mode == GameMode.computer && state.turn != setup.playerSide) _startComputer();
+    if (setup.mode == GameMode.computer && state.turn != setup.playerSide)
+      _startComputer();
   }
 
   void _refresh() => legalMoves = rules.legalMoves(state);
@@ -140,11 +168,18 @@ class GameController extends ChangeNotifier {
     notice = null;
     suggestedMove = null;
     final candidates = selectedCandidates;
-    final next = candidates.where((m) => m.landings.length > _prefix.length &&
-        m.landings[_prefix.length] == square).toList();
+    final next = candidates
+        .where(
+          (m) =>
+              m.landings.length > _prefix.length &&
+              m.landings[_prefix.length] == square,
+        )
+        .toList();
     if (next.isNotEmpty) {
       _prefix.add(square);
-      final completed = next.where((m) => m.landings.length == _prefix.length).firstOrNull;
+      final completed = next
+          .where((m) => m.landings.length == _prefix.length)
+          .firstOrNull;
       if (completed != null) {
         _clearSelection();
         unawaited(_apply(completed, remote: false));
@@ -171,13 +206,22 @@ class GameController extends ChangeNotifier {
     hintThinking = true;
     _notify();
     try {
-      final move = await compute(_searchMove, _SearchRequest(snapshot, 2, false));
-      if (!_disposed && generation == _generation && snapshot.fingerprint == state.fingerprint && settings.hints) {
+      final move = await compute(
+        _searchMove,
+        _SearchRequest(snapshot, 2, false),
+      );
+      if (!_disposed &&
+          generation == _generation &&
+          snapshot.fingerprint == state.fingerprint &&
+          settings.hints) {
         _clearSelection();
         suggestedMove = move;
       }
     } finally {
-      if (!_disposed) { hintThinking = false; _notify(); }
+      if (!_disposed) {
+        hintThinking = false;
+        _notify();
+      }
     }
   }
 
@@ -194,7 +238,9 @@ class GameController extends ChangeNotifier {
     final duration = animationPerLanding * move.landings.length;
     animation = MoveAnimation(before, move, duration);
     final generation = ++_generation;
-    final becameKing = !(before.board.at(move.from)?.king ?? false) && (state.board.at(move.to)?.king ?? false);
+    final becameKing =
+        !(before.board.at(move.from)?.king ?? false) &&
+        (state.board.at(move.to)?.king ?? false);
     sounds.play(becameKing ? 'crown' : (move.isCapture ? 'capture' : 'move'));
     _notify();
     if (duration > Duration.zero) await Future<void>.delayed(duration);
@@ -202,32 +248,50 @@ class GameController extends ChangeNotifier {
     animation = null;
     if (!remote && setup.mode == GameMode.network) {
       try {
-        setup.network!.send(NetworkMessage('move', {
-          'ply': before.ply, 'before': before.fingerprint, 'move': move.toJson(),
-        }));
-      } catch (_) { fatalMessage = 'Связь потеряна. Вернись в меню и попробуй ещё раз.'; }
+        setup.network!.send(
+          NetworkMessage('move', {
+            'ply': before.ply,
+            'before': before.fingerprint,
+            'move': move.toJson(),
+          }),
+        );
+      } catch (_) {
+        fatalMessage = 'Связь потеряна. Вернись в меню и попробуй ещё раз.';
+      }
     }
     _notify();
     if (winner != null || fatalMessage != null) return;
-    if (setup.mode == GameMode.computer && state.turn != setup.playerSide) _startComputer();
+    if (setup.mode == GameMode.computer && state.turn != setup.playerSide)
+      _startComputer();
   }
 
   void _startComputer() {
-    if (_disposed || computerThinking || winner != null || fatalMessage != null) return;
+    if (_disposed || computerThinking || winner != null || fatalMessage != null)
+      return;
     computerThinking = true;
     final generation = _generation;
     final snapshot = state;
     _notify();
     Future<void>(() async {
       try {
-        final move = await compute(_searchMove, _SearchRequest(snapshot, setup.difficulty.depth,
-            setup.difficulty == Difficulty.easy));
-        if (_disposed || generation != _generation || snapshot.fingerprint != state.fingerprint) return;
+        final move = await compute(
+          _searchMove,
+          _SearchRequest(
+            snapshot,
+            setup.difficulty.depth,
+            setup.difficulty == Difficulty.easy,
+          ),
+        );
+        if (_disposed ||
+            generation != _generation ||
+            snapshot.fingerprint != state.fingerprint)
+          return;
         if (move != null) await _apply(move, remote: false);
       } catch (_) {
         if (!_disposed && generation == _generation) {
           computerThinking = false;
-          fatalMessage = 'Не получилось сделать ход. Попробуй начать новую партию.';
+          fatalMessage =
+              'Не получилось сделать ход. Попробуй начать новую партию.';
           _notify();
         }
       }
@@ -239,13 +303,23 @@ class GameController extends ChangeNotifier {
     if (setup.mode == GameMode.network) {
       waitingForUndo = true;
       try {
-        setup.network!.send(NetworkMessage('undoRequest', {'ply': state.ply, 'before': state.fingerprint}));
-      } catch (_) { waitingForUndo = false; fatalMessage = 'Связь потеряна.'; }
+        setup.network!.send(
+          NetworkMessage('undoRequest', {
+            'ply': state.ply,
+            'before': state.fingerprint,
+          }),
+        );
+      } catch (_) {
+        waitingForUndo = false;
+        fatalMessage = 'Связь потеряна.';
+      }
       _notify();
       return;
     }
     var count = 1;
-    if (setup.mode == GameMode.computer && _history.last.turn != setup.playerSide) count = 2;
+    if (setup.mode == GameMode.computer &&
+        _history.last.turn != setup.playerSide)
+      count = 2;
     _restore(count);
   }
 
@@ -271,20 +345,27 @@ class GameController extends ChangeNotifier {
     final ply = incomingUndoPly;
     if (ply == null) return;
     try {
-      setup.network!.send(NetworkMessage('undoResponse', {'ply': ply, 'accepted': accepted}));
+      setup.network!.send(
+        NetworkMessage('undoResponse', {'ply': ply, 'accepted': accepted}),
+      );
       incomingUndoPly = null;
       if (accepted && state.ply == ply && _history.isNotEmpty) {
         _restore(1);
       } else {
         _notify();
       }
-    } catch (_) { fatalMessage = 'Связь потеряна.'; _notify(); }
+    } catch (_) {
+      fatalMessage = 'Связь потеряна.';
+      _notify();
+    }
   }
 
   void resign() {
     if (winner != null || fatalMessage != null) return;
     if (setup.mode == GameMode.network) {
-      try { setup.network!.send(const NetworkMessage('resign')); } catch (_) {}
+      try {
+        setup.network!.send(const NetworkMessage('resign'));
+      } catch (_) {}
       _resignedWinner = setup.playerSide.opponent;
     } else {
       _resignedWinner = state.turn.opponent;
@@ -300,27 +381,48 @@ class GameController extends ChangeNotifier {
     switch (message.type) {
       case 'move':
         try {
-          if (message.data['ply'] != state.ply || message.data['before'] != state.fingerprint ||
-              state.turn != setup.playerSide.opponent || isAnimating || incomingUndoPly != null) {
+          if (message.data['ply'] != state.ply ||
+              message.data['before'] != state.fingerprint ||
+              state.turn != setup.playerSide.opponent ||
+              isAnimating ||
+              incomingUndoPly != null) {
             throw const FormatException('Разные позиции');
           }
           final move = Move.fromJson(message.data['move']);
-          if (!legalMoves.contains(move)) throw const FormatException('Недопустимый ход');
-          waitingForUndo = false; // A simultaneous answer takes precedence over an undo request.
+          if (!legalMoves.contains(move))
+            throw const FormatException('Недопустимый ход');
+          waitingForUndo =
+              false; // A simultaneous answer takes precedence over an undo request.
           unawaited(_apply(move, remote: true));
-        } catch (_) { _desync(); }
+        } catch (_) {
+          _desync();
+        }
       case 'undoRequest':
-        final valid = message.data['ply'] == state.ply && message.data['before'] == state.fingerprint &&
-            _history.isNotEmpty && _history.last.turn == setup.playerSide.opponent &&
-            state.turn == setup.playerSide && !isAnimating && incomingUndoPly == null;
+        final valid =
+            message.data['ply'] == state.ply &&
+            message.data['before'] == state.fingerprint &&
+            _history.isNotEmpty &&
+            _history.last.turn == setup.playerSide.opponent &&
+            state.turn == setup.playerSide &&
+            !isAnimating &&
+            incomingUndoPly == null;
         if (valid) {
           incomingUndoPly = state.ply;
           _notify();
         } else {
-          try { setup.network!.send(NetworkMessage('undoResponse', {'ply': message.data['ply'], 'accepted': false})); } catch (_) {}
+          try {
+            setup.network!.send(
+              NetworkMessage('undoResponse', {
+                'ply': message.data['ply'],
+                'accepted': false,
+              }),
+            );
+          } catch (_) {}
         }
       case 'undoResponse':
-        if (waitingForUndo && message.data['ply'] == state.ply && message.data['accepted'] is bool) {
+        if (waitingForUndo &&
+            message.data['ply'] == state.ply &&
+            message.data['accepted'] is bool) {
           waitingForUndo = false;
           if (message.data['accepted'] == true && _history.isNotEmpty) {
             _restore(1);
@@ -342,20 +444,29 @@ class GameController extends ChangeNotifier {
           fatalMessage = 'Связь потеряна. Вернись в меню и попробуй ещё раз.';
           _notify();
         }
-      default: break;
+      default:
+        break;
     }
   }
 
   void _desync() {
-    try { setup.network!.send(const NetworkMessage('desync')); } catch (_) {}
+    try {
+      setup.network!.send(const NetworkMessage('desync'));
+    } catch (_) {}
     fatalMessage = 'Партии перестали совпадать. Начните новую игру.';
     _generation++;
     animation = null;
     _notify();
   }
 
-  void _clearSelection() { selected = null; _prefix.clear(); }
-  void _notify() { if (!_disposed) notifyListeners(); }
+  void _clearSelection() {
+    selected = null;
+    _prefix.clear();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
 
   @visibleForTesting
   Future<void> playLegalMoveForTest(Move move) => _apply(move, remote: true);

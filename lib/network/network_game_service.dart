@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:nsd/nsd.dart' as nsd;
@@ -12,10 +11,22 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'protocol.dart';
 
-enum NetworkStatus { idle, hosting, discovering, connecting, connected, disconnected }
+enum NetworkStatus {
+  idle,
+  hosting,
+  discovering,
+  connecting,
+  connected,
+  disconnected,
+}
 
 class DiscoveredGame {
-  const DiscoveredGame({required this.code, required this.name, required this.host, required this.port});
+  const DiscoveredGame({
+    required this.code,
+    required this.name,
+    required this.host,
+    required this.port,
+  });
   final String code;
   final String name;
   final String host;
@@ -48,7 +59,10 @@ class NetworkGameService extends ChangeNotifier {
 
   static String newCode([Random? random]) {
     final rng = random ?? Random.secure();
-    return List.generate(6, (_) => codeAlphabet[rng.nextInt(codeAlphabet.length)]).join();
+    return List.generate(
+      6,
+      (_) => codeAlphabet[rng.nextInt(codeAlphabet.length)],
+    ).join();
   }
 
   List<DiscoveredGame> get games {
@@ -58,44 +72,79 @@ class NetworkGameService extends ChangeNotifier {
       final match = pattern.firstMatch(service.name ?? '');
       if (match == null || service.port == null) continue;
       final addresses = service.addresses ?? [];
-      final host = addresses.where((a) => a.type == InternetAddressType.IPv4).firstOrNull?.address ??
-          addresses.firstOrNull?.address ?? service.host;
+      final host =
+          addresses
+              .where((a) => a.type == InternetAddressType.IPv4)
+              .firstOrNull
+              ?.address ??
+          addresses.firstOrNull?.address ??
+          service.host;
       if (host == null || host.isEmpty) continue;
       var name = 'Игра друга';
       final nameBytes = service.txt?['name'];
       if (nameBytes != null) {
         final decoded = utf8.decode(nameBytes, allowMalformed: true).trim();
-        if (decoded.isNotEmpty) name = decoded.length > 40 ? decoded.substring(0, 40) : decoded;
+        if (decoded.isNotEmpty)
+          name = decoded.length > 40 ? decoded.substring(0, 40) : decoded;
       }
-      result.add(DiscoveredGame(code: match.group(1)!, name: name, host: host, port: service.port!));
+      result.add(
+        DiscoveredGame(
+          code: match.group(1)!,
+          name: name,
+          host: host,
+          port: service.port!,
+        ),
+      );
     }
     return result;
   }
 
-  Future<void> host(GameConfig game, {bool advertise = true, InternetAddress? bindAddress}) async {
-    if (status != NetworkStatus.idle || !isGameCode(game.code)) throw StateError('Нельзя создать игру');
+  Future<void> host(
+    GameConfig game, {
+    bool advertise = true,
+    InternetAddress? bindAddress,
+  }) async {
+    if (status != NetworkStatus.idle || !isGameCode(game.code))
+      throw StateError('Нельзя создать игру');
     isHost = true;
     config = game;
-    _server = await shelf_io.serve(webSocketHandler((socket, _) => _accept(socket)),
-        bindAddress ?? InternetAddress.anyIPv4, 0);
+    _server = await shelf_io.serve(
+      webSocketHandler((socket, _) => _accept(socket)),
+      bindAddress ?? InternetAddress.anyIPv4,
+      0,
+    );
     port = _server!.port;
     status = NetworkStatus.hosting;
     _notify();
     if (advertise) {
       try {
-        _registration = await nsd.register(nsd.Service(
-          name: 'Diana-${game.code}', type: serviceType, port: port,
-          txt: {'name': Uint8List.fromList(utf8.encode(game.hostName))},
-        ));
+        _registration = await nsd.register(
+          nsd.Service(
+            name: 'Diana-${game.code}',
+            type: serviceType,
+            port: port,
+            txt: {'name': Uint8List.fromList(utf8.encode(game.hostName))},
+          ),
+        );
       } catch (_) {
         // The server remains available through the explicit IP:port fallback.
-        discoveryError = 'Не получилось объявить игру в сети. Можно подключиться по адресу.';
+        discoveryError =
+            'Не получилось объявить игру в сети. Можно подключиться по адресу.';
       }
     }
     try {
-      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
-      localAddress = interfaces.expand((i) => i.addresses).where((a) => !a.isLoopback).firstOrNull?.address;
-    } catch (_) { /* The advanced address is optional. */ }
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+      );
+      localAddress = interfaces
+          .expand((i) => i.addresses)
+          .where((a) => !a.isLoopback)
+          .firstOrNull
+          ?.address;
+    } catch (_) {
+      /* The advanced address is optional. */
+    }
     _notify();
   }
 
@@ -108,27 +157,44 @@ class NetworkGameService extends ChangeNotifier {
     discoveryError = null;
     _notify();
     try {
-      _discovery = await nsd.startDiscovery(serviceType, ipLookupType: nsd.IpLookupType.any);
+      _discovery = await nsd.startDiscovery(
+        serviceType,
+        ipLookupType: nsd.IpLookupType.any,
+      );
       _discovery!.addListener(_notify);
     } catch (_) {
-      discoveryError = 'Поиск в сети недоступен. Попробуй подключение по адресу.';
+      discoveryError =
+          'Поиск в сети недоступен. Попробуй подключение по адресу.';
     }
     _notify();
   }
 
   Future<void> connect(String host, int serverPort, {String? code}) async {
-    if (status != NetworkStatus.idle && status != NetworkStatus.discovering && status != NetworkStatus.disconnected) {
+    if (status != NetworkStatus.idle &&
+        status != NetworkStatus.discovering &&
+        status != NetworkStatus.disconnected) {
       throw StateError('Подключение уже выполняется');
     }
-    if (serverPort < 1 || serverPort > 65535 || host.trim().isEmpty ||
-        (code != null && !isGameCode(code))) throw const FormatException('Проверь адрес или код');
+    if (serverPort < 1 ||
+        serverPort > 65535 ||
+        host.trim().isEmpty ||
+        (code != null && !isGameCode(code))) {
+      throw const FormatException('Проверь адрес или код');
+    }
     status = NetworkStatus.connecting;
     _notify();
     try {
-      final channel = WebSocketChannel.connect(Uri(scheme: 'ws', host: host, port: serverPort, path: '/'));
+      final channel = WebSocketChannel.connect(
+        Uri(scheme: 'ws', host: host, port: serverPort, path: '/'),
+      );
       _attach(channel);
       await channel.ready.timeout(const Duration(seconds: 8));
-      _sendRaw(NetworkMessage('hello', {'version': protocolVersion, 'code': code ?? ''}));
+      _sendRaw(
+        NetworkMessage('hello', {
+          'version': protocolVersion,
+          'code': code ?? '',
+        }),
+      );
     } catch (_) {
       await _socketSubscription?.cancel();
       await _channel?.sink.close();
@@ -151,7 +217,11 @@ class NetworkGameService extends ChangeNotifier {
     _channel = channel;
     _lastHeard = DateTime.now();
     _handshake = false;
-    _socketSubscription = channel.stream.listen(_receive, onError: (_) => _lost(), onDone: _lost);
+    _socketSubscription = channel.stream.listen(
+      _receive,
+      onError: (_) => _lost(),
+      onDone: _lost,
+    );
     _handshakeTimer = Timer(const Duration(seconds: 10), () {
       if (!_handshake) _lost();
     });
@@ -163,8 +233,11 @@ class NetworkGameService extends ChangeNotifier {
       final message = NetworkMessage.decode(raw);
       _lastHeard = DateTime.now();
       if (!_handshake) {
-        if (isHost && message.type == 'hello' && message.data['version'] == protocolVersion &&
-            (message.data['code'] == '' || message.data['code'] == config!.code)) {
+        if (isHost &&
+            message.type == 'hello' &&
+            message.data['version'] == protocolVersion &&
+            (message.data['code'] == '' ||
+                message.data['code'] == config!.code)) {
           _handshake = true;
           _sendRaw(NetworkMessage('gameConfig', config!.toJson()));
           _connected();
@@ -175,20 +248,28 @@ class NetworkGameService extends ChangeNotifier {
           _connected();
           _events.add(message);
         } else {
-          _sendRaw(const NetworkMessage('error', {'message': 'Не удалось подключиться к этой игре'}));
+          _sendRaw(
+            const NetworkMessage('error', {
+              'message': 'Не удалось подключиться к этой игре',
+            }),
+          );
           _lost();
         }
         return;
       }
       switch (message.type) {
-        case 'ping': _sendRaw(const NetworkMessage('pong')); return;
-        case 'pong': return;
+        case 'ping':
+          _sendRaw(const NetworkMessage('pong'));
+          return;
+        case 'pong':
+          return;
         case 'hello':
         case 'gameConfig':
         case 'connected':
         case 'disconnected':
           throw const FormatException('Неожиданное служебное сообщение');
-        default: _events.add(message);
+        default:
+          _events.add(message);
       }
     } catch (_) {
       _events.add(const NetworkMessage('desync'));
@@ -210,7 +291,8 @@ class NetworkGameService extends ChangeNotifier {
   }
 
   void send(NetworkMessage message) {
-    if (status != NetworkStatus.connected || !_handshake) throw StateError('Связь потеряна');
+    if (status != NetworkStatus.connected || !_handshake)
+      throw StateError('Связь потеряна');
     _sendRaw(message);
   }
 
@@ -227,7 +309,9 @@ class NetworkGameService extends ChangeNotifier {
     _notify();
   }
 
-  void _notify() { if (!_disposed) notifyListeners(); }
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
 
   /// Cancels discovery, advertising, timers, socket and server. Idempotent.
   Future<void> close() async {
@@ -237,11 +321,15 @@ class NetworkGameService extends ChangeNotifier {
     _handshakeTimer?.cancel();
     if (_discovery != null) {
       _discovery!.removeListener(_notify);
-      try { await nsd.stopDiscovery(_discovery!); } catch (_) {}
+      try {
+        await nsd.stopDiscovery(_discovery!);
+      } catch (_) {}
       _discovery = null;
     }
     if (_registration != null) {
-      try { await nsd.unregister(_registration!); } catch (_) {}
+      try {
+        await nsd.unregister(_registration!);
+      } catch (_) {}
       _registration = null;
     }
     await _socketSubscription?.cancel();
