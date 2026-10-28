@@ -51,6 +51,6 @@ jobs:
           python3 - <<'PY'
           import base64
           data=base64.b64encode(open('/tmp/native.tgz','rb').read()).decode()
-          for i in range(0, len(data), 12000):
-              print(f'::notice title=scaffold-{i//12000:04d}::{data[i:i+12000]}')
+          for i in range(0, len(data), 4000):
+              print(f'::notice title=scaffold-{i//4000:04d}::{data[i:i+4000]}')
           PY
