@@ -6,7 +6,7 @@ if [ -n "${status:-}" ]; then
   python3 - <<'PY'
 from pathlib import Path
 text = Path('/tmp/integration.txt').read_text()
-blocks = text.split('[E]')[1:] or [text[-3900:]]
+blocks = ['EXCEPTION CAUGHT' + b for b in text.split('EXCEPTION CAUGHT')[1:]] or [text[-3900:]]
 for block in blocks[:8]:
     print('::error title=integration-output::' + block[:3900].replace('%','%25').replace('\n','%0A').replace('\r','%0D'))
 PY

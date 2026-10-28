@@ -25,6 +25,8 @@ class _GamePageState extends State<GamePage> {
     widget.settings,
   );
   bool resultShown = false;
+  bool resultDialogOpen = false;
+  bool resultRecorded = false;
   bool errorShown = false;
   bool undoDialogShown = false;
   bool exiting = false;
@@ -56,6 +58,8 @@ class _GamePageState extends State<GamePage> {
     } else if (controller.winner != null &&
         !controller.isAnimating &&
         !resultShown &&
+        !controller.waitingForUndo &&
+        controller.incomingUndoPly == null &&
         controller.fatalMessage == null) {
       resultShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,6 +109,11 @@ class _GamePageState extends State<GamePage> {
     );
     if (!mounted) return;
     undoDialogShown = false;
+    if (accepted == true && resultDialogOpen) {
+      Navigator.of(context).pop();
+      resultDialogOpen = false;
+      resultShown = false;
+    }
     controller.respondToUndo(accepted == true);
   }
 
@@ -115,8 +124,8 @@ class _GamePageState extends State<GamePage> {
       return;
     }
     final mine = winner == widget.setup.playerSide;
-    unawaited(widget.settings.recordGame(won: mine));
     controller.sounds.play('win');
+    resultDialogOpen = true;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -154,8 +163,19 @@ class _GamePageState extends State<GamePage> {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
+          if (controller.canUndo)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                resultDialogOpen = false;
+                resultShown = false;
+                controller.undo();
+              },
+              child: const Text('Отменить ход'),
+            ),
           TextButton(
             onPressed: () {
+              _recordResult(mine);
               Navigator.pop(dialogContext);
               _goHome();
             },
@@ -163,6 +183,7 @@ class _GamePageState extends State<GamePage> {
           ),
           FilledButton(
             onPressed: () {
+              _recordResult(mine);
               Navigator.pop(dialogContext);
               _playAgain();
             },
@@ -171,6 +192,13 @@ class _GamePageState extends State<GamePage> {
         ],
       ),
     );
+    resultDialogOpen = false;
+  }
+
+  void _recordResult(bool won) {
+    if (resultRecorded) return;
+    resultRecorded = true;
+    unawaited(widget.settings.recordGame(won: won));
   }
 
   void _goHome() {
@@ -490,7 +518,9 @@ class _GamePageState extends State<GamePage> {
     if (side == widget.setup.playerSide) return widget.settings.nickname;
     if (widget.setup.mode == GameMode.computer) return 'Компьютер';
     final network = widget.setup.network!;
-    return network.isHost ? 'Друг' : (network.config?.hostName ?? 'Друг');
+    return network.isHost
+        ? network.peerName
+        : (network.config?.hostName ?? 'Друг');
   }
 
   Widget _playerPanel(Side side, {required bool top}) {
@@ -543,8 +573,9 @@ class _GamePageState extends State<GamePage> {
         ],
       ),
     );
-    if (top && widget.setup.mode == GameMode.local)
+    if (top && widget.setup.mode == GameMode.local) {
       panel = RotatedBox(quarterTurns: 2, child: panel);
+    }
     return panel;
   }
 

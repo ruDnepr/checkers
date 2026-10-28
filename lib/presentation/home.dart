@@ -25,12 +25,13 @@ class _SplashPageState extends State<SplashPage>
   void initState() {
     super.initState();
     _timer = Timer(const Duration(milliseconds: 1500), () {
-      if (mounted)
+      if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => HomePage(settings: widget.settings),
           ),
         );
+      }
     });
   }
 

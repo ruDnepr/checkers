@@ -105,11 +105,12 @@ class _NetworkPageState extends State<NetworkPage> {
     try {
       await service.host(config);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => message =
               'Не получилось создать игру. Проверь подключение к Wi-Fi.',
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -131,12 +132,18 @@ class _NetworkPageState extends State<NetworkPage> {
       message = null;
     });
     try {
-      await service.connect(host, port, code: code);
+      await service.connect(
+        host,
+        port,
+        code: code,
+        playerName: widget.settings.nickname,
+      );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => message = 'Не получилось подключиться. Проверь адрес и Wi-Fi.',
         );
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }

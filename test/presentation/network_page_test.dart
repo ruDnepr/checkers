@@ -81,6 +81,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('Создать игру'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.byKey(const Key('hand-left')));
     await tester.pump(const Duration(milliseconds: 1700));

@@ -117,6 +117,7 @@ class GameController extends ChangeNotifier {
 
   bool get canUndo {
     if (_history.isEmpty ||
+        _resignedWinner != null ||
         isAnimating ||
         waitingForUndo ||
         incomingUndoPly != null ||
@@ -288,6 +289,7 @@ class GameController extends ChangeNotifier {
     final snapshot = state;
     _notify();
     Future<void>(() async {
+      if (_disposed || generation != _generation) return;
       try {
         final move = await compute(
           _searchMove,
@@ -386,7 +388,9 @@ class GameController extends ChangeNotifier {
       } catch (_) {}
       _resignedWinner = setup.playerSide.opponent;
     } else {
-      _resignedWinner = state.turn.opponent;
+      _resignedWinner = setup.mode == GameMode.local
+          ? state.turn.opponent
+          : setup.playerSide.opponent;
     }
     _generation++;
     computerThinking = false;

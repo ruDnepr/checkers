@@ -49,6 +49,7 @@ void main() {
     await tester.tap(find.text('Русские шашки'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Два игрока'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(GuessPage), findsOneWidget);
     await tester.tap(find.byKey(const Key('hand-left')));

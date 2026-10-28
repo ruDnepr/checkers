@@ -42,6 +42,7 @@ class NetworkGameService extends ChangeNotifier {
   int? port;
   String? localAddress;
   String? discoveryError;
+  String peerName = 'Друг';
 
   HttpServer? _server;
   WebSocketChannel? _channel;
@@ -110,17 +111,22 @@ class NetworkGameService extends ChangeNotifier {
     }
     isHost = true;
     config = game;
-    _server = await shelf_io.serve(
+    final server = await shelf_io.serve(
       webSocketHandler((socket, _) => _accept(socket)),
       bindAddress ?? InternetAddress.anyIPv4,
       0,
     );
-    port = _server!.port;
+    if (_closed) {
+      await server.close(force: true);
+      return;
+    }
+    _server = server;
+    port = server.port;
     status = NetworkStatus.hosting;
     _notify();
     if (advertise) {
       try {
-        _registration = await nsd.register(
+        final registration = await nsd.register(
           nsd.Service(
             name: 'Diana-${game.code}',
             type: serviceType,
@@ -128,6 +134,11 @@ class NetworkGameService extends ChangeNotifier {
             txt: {'name': Uint8List.fromList(utf8.encode(game.hostName))},
           ),
         );
+        if (_closed || status == NetworkStatus.connected) {
+          await nsd.unregister(registration);
+        } else {
+          _registration = registration;
+        }
       } catch (_) {
         // The server remains available through the explicit IP:port fallback.
         discoveryError =
@@ -159,11 +170,16 @@ class NetworkGameService extends ChangeNotifier {
     discoveryError = null;
     _notify();
     try {
-      _discovery = await nsd.startDiscovery(
+      final discovery = await nsd.startDiscovery(
         serviceType,
         ipLookupType: nsd.IpLookupType.any,
       );
-      _discovery!.addListener(_notify);
+      if (_closed || status == NetworkStatus.connected) {
+        await nsd.stopDiscovery(discovery);
+      } else {
+        _discovery = discovery;
+        discovery.addListener(_notify);
+      }
     } catch (_) {
       discoveryError =
           'Поиск в сети недоступен. Попробуй подключение по адресу.';
@@ -171,7 +187,12 @@ class NetworkGameService extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> connect(String host, int serverPort, {String? code}) async {
+  Future<void> connect(
+    String host,
+    int serverPort, {
+    String? code,
+    String playerName = 'Друг',
+  }) async {
     if (status != NetworkStatus.idle &&
         status != NetworkStatus.discovering &&
         status != NetworkStatus.disconnected) {
@@ -195,6 +216,9 @@ class NetworkGameService extends ChangeNotifier {
         NetworkMessage('hello', {
           'version': protocolVersion,
           'code': code ?? '',
+          'name': playerName.length > 40
+              ? playerName.substring(0, 40)
+              : playerName,
         }),
       );
     } catch (_) {
@@ -240,6 +264,10 @@ class NetworkGameService extends ChangeNotifier {
             message.data['version'] == protocolVersion &&
             (message.data['code'] == '' ||
                 message.data['code'] == config!.code)) {
+          final name = message.data['name'];
+          if (name is String && name.trim().isNotEmpty) {
+            peerName = name.length > 40 ? name.substring(0, 40) : name;
+          }
           _handshake = true;
           _sendRaw(NetworkMessage('gameConfig', config!.toJson()));
           _connected();
@@ -282,6 +310,10 @@ class NetworkGameService extends ChangeNotifier {
   void _connected() {
     _handshakeTimer?.cancel();
     status = NetworkStatus.connected;
+    // A full game is no longer discoverable; release the expensive discovery
+    // and registration resources as soon as a peer has joined.
+    unawaited(_stopDiscovery());
+    unawaited(_stopAdvertising());
     _heartbeat = Timer.periodic(const Duration(seconds: 10), (_) {
       if (DateTime.now().difference(_lastHeard) > const Duration(seconds: 30)) {
         _lost();
@@ -316,25 +348,33 @@ class NetworkGameService extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  Future<void> _stopDiscovery() async {
+    final discovery = _discovery;
+    _discovery = null;
+    if (discovery == null) return;
+    discovery.removeListener(_notify);
+    try {
+      await nsd.stopDiscovery(discovery);
+    } catch (_) {}
+  }
+
+  Future<void> _stopAdvertising() async {
+    final registration = _registration;
+    _registration = null;
+    if (registration == null) return;
+    try {
+      await nsd.unregister(registration);
+    } catch (_) {}
+  }
+
   /// Cancels discovery, advertising, timers, socket and server. Idempotent.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
     _heartbeat?.cancel();
     _handshakeTimer?.cancel();
-    if (_discovery != null) {
-      _discovery!.removeListener(_notify);
-      try {
-        await nsd.stopDiscovery(_discovery!);
-      } catch (_) {}
-      _discovery = null;
-    }
-    if (_registration != null) {
-      try {
-        await nsd.unregister(_registration!);
-      } catch (_) {}
-      _registration = null;
-    }
+    await _stopDiscovery();
+    await _stopAdvertising();
     await _socketSubscription?.cancel();
     await _channel?.sink.close();
     await _server?.close(force: true);

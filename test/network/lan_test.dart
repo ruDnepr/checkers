@@ -49,9 +49,15 @@ void main() {
     final configured = client.events.firstWhere(
       (event) => event.type == 'gameConfig',
     );
-    await client.connect('127.0.0.1', host.port!, code: config.code);
+    await client.connect(
+      '127.0.0.1',
+      host.port!,
+      code: config.code,
+      playerName: 'Маша',
+    );
     await configured.timeout(const Duration(seconds: 5));
     expect(host.status, NetworkStatus.connected);
+    expect(host.peerName, 'Маша');
     expect(client.config!.hostSide, Side.white);
 
     final settings = SettingsController()..sound = false;

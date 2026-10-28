@@ -35,7 +35,7 @@ class SettingsController extends ChangeNotifier {
     final trimmed = value.trim();
     nickname = trimmed.isEmpty
         ? 'Диана'
-        : trimmed.substring(0, trimmed.length > 20 ? 20 : trimmed.length);
+        : String.fromCharCodes(trimmed.runes.take(20));
     notifyListeners();
     await _preferences?.setString('nickname', nickname);
   }

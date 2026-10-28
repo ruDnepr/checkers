@@ -100,4 +100,25 @@ void main() {
     expect(game.suggestedMove, isNull);
     expect(game.legalMoves.toSet(), before);
   });
+  test('сдача во время хода компьютера отдаёт победу компьютеру', () async {
+    final settings = SettingsController()..sound = false;
+    final game = GameController(
+      const GameSetup(
+        variant: GameVariant.russian,
+        mode: GameMode.computer,
+        playerSide: Side.white,
+      ),
+      settings,
+      animationPerLanding: Duration.zero,
+    );
+    addTearDown(() {
+      game.dispose();
+      settings.dispose();
+    });
+    await game.playLegalMoveForTest(game.legalMoves.first);
+    expect(game.state.turn, Side.black);
+    game.resign();
+    expect(game.winner, Side.black);
+    expect(game.canUndo, isFalse);
+  });
 }

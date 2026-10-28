@@ -71,6 +71,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('Начать'));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byKey(const Key('hand-left')), findsOneWidget);
     expect(find.byKey(const Key('hand-right')), findsOneWidget);
