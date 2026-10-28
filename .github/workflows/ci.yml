@@ -175,6 +175,13 @@ jobs:
           PY
           fi
           exit ${status:-0}
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-log
+          path: /tmp/build.txt
+          if-no-files-found: ignore
   ios-build:
     runs-on: macos-15
     timeout-minutes: 40
@@ -229,3 +236,12 @@ jobs:
           emulator-boot-timeout: 600
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: ./tool/run_integration.sh
+      - name: Upload device logs
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-logs
+          path: |
+            /tmp/integration.txt
+            /tmp/device.txt
+          if-no-files-found: ignore
