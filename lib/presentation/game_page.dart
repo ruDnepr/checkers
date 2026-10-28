@@ -12,9 +12,17 @@ import 'setup_pages.dart';
 import 'theme.dart';
 
 class GamePage extends StatefulWidget {
-  const GamePage({super.key, required this.settings, required this.setup});
+  const GamePage({
+    super.key,
+    required this.settings,
+    required this.setup,
+    this.animationPerLanding = const Duration(milliseconds: 350),
+  });
   final SettingsController settings;
   final GameSetup setup;
+
+  /// Shorter values keep device tests fast; the game itself uses 350 ms.
+  final Duration animationPerLanding;
   @override
   State<GamePage> createState() => _GamePageState();
 }
@@ -23,6 +31,7 @@ class _GamePageState extends State<GamePage> {
   late final GameController controller = GameController(
     widget.setup,
     widget.settings,
+    animationPerLanding: widget.animationPerLanding,
   );
   bool resultShown = false;
   bool resultDialogOpen = false;

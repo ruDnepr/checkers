@@ -11,11 +11,16 @@ extension DifficultyDetails on Difficulty {
     Difficulty.medium => 'Средний',
     Difficulty.hard => 'Сложный',
   };
+  /// Search depth in plies. The easy level looks only at its own move with a
+  /// material-only score, so it blunders like a beginner and stays beatable.
   int get depth => switch (this) {
-    Difficulty.easy => 2,
+    Difficulty.easy => 1,
     Difficulty.medium => 3,
     Difficulty.hard => 5,
   };
+
+  /// Minimal heuristics: material alone, no positional terms.
+  bool get materialOnly => this == Difficulty.easy;
 }
 
 /// Minimax over complete turns, with alpha-beta pruning and a bounded search.
@@ -27,7 +32,12 @@ class CheckersAI {
   final int nodeBudget;
   int _nodes = 0;
 
-  Move? findBestMove(GameState state, int depth, {bool easyNoise = false}) {
+  Move? findBestMove(
+    GameState state,
+    int depth, {
+    bool easyNoise = false,
+    bool materialOnly = false,
+  }) {
     if (depth < 1) throw ArgumentError.value(depth, 'depth');
     _nodes = 0;
     final rules = GameRules.forVariant(state.variant) as StandardRules;
@@ -39,7 +49,15 @@ class CheckersAI {
     var alpha = double.negativeInfinity;
     for (final move in _ordered(legal)) {
       final next = rules.applyKnownLegal(state, move);
-      var score = _search(next, rules, depth - 1, alpha, double.infinity, root);
+      var score = _search(
+        next,
+        rules,
+        depth - 1,
+        alpha,
+        double.infinity,
+        root,
+        materialOnly,
+      );
       // A little variety only affects the easy opponent, never a requested hint.
       if (easyNoise && score.abs() < 100000) {
         score += (_random.nextDouble() - 0.5) * 0.5;
@@ -60,6 +78,7 @@ class CheckersAI {
     double alpha,
     double beta,
     Side root,
+    bool materialOnly,
   ) {
     _nodes++;
     final legal = rules.legalMoves(state);
@@ -69,7 +88,9 @@ class CheckersAI {
           : state.turn.opponent;
       return winner == root ? 1000000.0 + depth : -1000000.0 - depth;
     }
-    if (depth == 0 || _nodes >= nodeBudget) return _evaluate(state, root);
+    if (depth == 0 || _nodes >= nodeBudget) {
+      return _evaluate(state, root, materialOnly);
+    }
     final maximizing = state.turn == root;
     var best = maximizing ? double.negativeInfinity : double.infinity;
     for (final move in _ordered(legal)) {
@@ -80,6 +101,7 @@ class CheckersAI {
         alpha,
         beta,
         root,
+        materialOnly,
       );
       if (maximizing) {
         best = max(best, value);
@@ -97,7 +119,7 @@ class CheckersAI {
       [...moves]
         ..sort((a, b) => b.captures.length.compareTo(a.captures.length));
 
-  double _evaluate(GameState state, Side root) {
+  double _evaluate(GameState state, Side root, bool materialOnly) {
     var value = 0.0;
     final size = state.board.size;
     for (final entry in state.board.pieces.entries) {
@@ -106,14 +128,21 @@ class CheckersAI {
       final progress = piece.side == Side.white
           ? size - 1 - square.row
           : square.row;
-      final center = 1 - ((square.col - (size - 1) / 2).abs() / (size / 2));
-      final edgeSafety = (square.col == 0 || square.col == size - 1)
-          ? 0.12
-          : 0.0;
-      final weight =
-          (piece.king ? 3.1 : 1.0 + progress * 0.07) +
-          center * 0.15 +
-          edgeSafety;
+      final double weight;
+      if (materialOnly) {
+        // Material plus a nudge towards promotion, so the easy opponent still
+        // moves forward instead of shuffling.
+        weight = (piece.king ? 3 : 1) + (piece.king ? 0 : progress * 0.05);
+      } else {
+        final center = 1 - ((square.col - (size - 1) / 2).abs() / (size / 2));
+        final edgeSafety = (square.col == 0 || square.col == size - 1)
+            ? 0.12
+            : 0.0;
+        weight =
+            (piece.king ? 3.1 : 1.0 + progress * 0.07) +
+            center * 0.15 +
+            edgeSafety;
+      }
       value += piece.side == root ? weight : -weight;
     }
     return state.variant.reverseGoal ? -value : value;

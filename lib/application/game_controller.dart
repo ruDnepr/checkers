@@ -41,16 +41,18 @@ class MoveAnimation {
 }
 
 class _SearchRequest {
-  const _SearchRequest(this.state, this.depth, this.noise);
+  const _SearchRequest(this.state, this.depth, this.noise, this.materialOnly);
   final GameState state;
   final int depth;
   final bool noise;
+  final bool materialOnly;
 }
 
 Move? _searchMove(_SearchRequest request) => CheckersAI().findBestMove(
   request.state,
   request.depth,
   easyNoise: request.noise,
+  materialOnly: request.materialOnly,
 );
 
 class GameController extends ChangeNotifier {
@@ -213,9 +215,11 @@ class GameController extends ChangeNotifier {
     hintThinking = true;
     _notify();
     try {
+      // The hint always searches two plies with the full heuristic, which is
+      // stronger than the easy opponent and is what a child should copy.
       final move = await compute(
         _searchMove,
-        _SearchRequest(snapshot, 2, false),
+        _SearchRequest(snapshot, 2, false, false),
       );
       if (!_disposed &&
           generation == _generation &&
@@ -297,6 +301,7 @@ class GameController extends ChangeNotifier {
             snapshot,
             setup.difficulty.depth,
             setup.difficulty == Difficulty.easy,
+            setup.difficulty.materialOnly,
           ),
         );
         if (_disposed ||
