@@ -14,13 +14,9 @@ else
   for file in integration_test/*_test.dart; do
     echo "=== $file" >> /tmp/integration.txt
     # A wedged emulator can leave `flutter test` waiting forever, so every run
-    # is bounded; a launch that times out gets one more attempt.
-    if ! timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
-      >> /tmp/integration.txt 2>&1; then
-      echo "=== повтор после сбоя: $file" >> /tmp/integration.txt
-      timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
-        >> /tmp/integration.txt 2>&1 || status=1
-    fi
+    # is bounded and a failure still leaves the log for the annotations.
+    timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
+      >> /tmp/integration.txt 2>&1 || status=1
   done
 fi
 cat /tmp/integration.txt

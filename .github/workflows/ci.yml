@@ -199,7 +199,11 @@ jobs:
           exit ${status:-0}
   android-integration:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
+    # Hosted runners sometimes hand out a machine without working KVM and the
+    # emulator never boots. The job is advisory: it publishes the device log in
+    # the check annotations, but builds, analysis and tests stay the gate.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
