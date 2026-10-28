@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   # The hosted emulator is not reliable enough to gate every commit: it hangs
   # often enough that a run either times out or takes the whole runner. The
   # device job therefore runs nightly and on demand, and the fast jobs are the
@@ -212,12 +213,13 @@ jobs:
           fi
           exit ${status:-0}
   android-integration:
-    # Also runs for a commit whose message contains [device], which makes a
-    # one-off device check possible without waiting for the nightly run.
+    # The device run also starts when the pull request gets the `device` label,
+    # which makes a one-off check possible without waiting for the nightly run.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
-      contains(github.event.head_commit.message, '[device]')
+      (github.event_name == 'pull_request' &&
+      contains(github.event.pull_request.labels.*.name, 'device'))
     runs-on: ubuntu-latest
     # Boot (10 min) + one warm-up build (10 min) + four bounded test runs must
     # all fit inside this, otherwise the runner cancels the job at the cap.
