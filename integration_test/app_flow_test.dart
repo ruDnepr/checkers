@@ -10,6 +10,7 @@ import 'package:checkers_for_diana/network/protocol.dart';
 import 'package:checkers_for_diana/presentation/board_game.dart';
 import 'package:checkers_for_diana/presentation/game_page.dart';
 import 'package:checkers_for_diana/presentation/setup_pages.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +23,7 @@ Future<void> waitForGame(
   GameController game,
   bool Function() condition, {
   String reason = 'состояние партии',
-  Duration timeout = const Duration(seconds: 30),
+  Duration timeout = const Duration(seconds: 15),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -30,6 +31,9 @@ Future<void> waitForGame(
       fail(
         'Не дождались: $reason (за ${timeout.inSeconds} с). '
         'Ход: ${game.state.turn.label}, полуходов: ${game.state.ply}, '
+        'думает компьютер: ${game.computerThinking}, '
+        'думает подсказка: ${game.hintThinking}, '
+        'анимация: ${game.isAnimating}, '
         'ошибка: ${game.fatalMessage ?? 'нет'}',
       );
     }
@@ -37,6 +41,8 @@ Future<void> waitForGame(
   }
   await tester.pump();
 }
+
+int _doubled(int value) => value * 2;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -72,6 +78,15 @@ void main() {
   );
 
   testWidgets(
+    'изолят из compute работает на устройстве',
+    (tester) async {
+      final value = await tester.runAsync(() => compute(_doubled, 21));
+      expect(value, 42);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  testWidgets(
     'подсказка, ответ компьютера и отмена на устройстве',
     (tester) async {
       final settings = SettingsController();
@@ -96,11 +111,13 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 500));
+      debugPrint('ШАГ: игровой экран открыт');
       final game = tester.widget<BoardView>(find.byType(BoardView)).controller;
       expect(game.canInteract, isTrue, reason: 'ход должен быть у игрока');
 
       await tester.ensureVisible(find.byKey(const Key('hint-button')));
       await tester.tap(find.byKey(const Key('hint-button')));
+      debugPrint('ШАГ: нажата подсказка');
       await waitForGame(
         tester,
         game,
@@ -108,6 +125,7 @@ void main() {
         reason: 'подсказка с подсветкой хода',
       );
       expect(game.suggestedMove, isNotNull);
+      debugPrint('ШАГ: подсказка получена');
 
       final initial = game.state.fingerprint;
       await tester.ensureVisible(find.byType(BoardView));
@@ -121,12 +139,14 @@ void main() {
       await tester.tapAt(
         Offset(rect.left + cell * 1.5, rect.top + cell * 4.5),
       );
+      debugPrint('ШАГ: ход игрока сделан');
       await waitForGame(
         tester,
         game,
         () => game.state.ply == 2 && !game.isAnimating,
         reason: 'ответ компьютера на полуходе 2',
       );
+      debugPrint('ШАГ: компьютер ответил');
 
       await tester.ensureVisible(find.byKey(const Key('undo-button')));
       await tester.tap(find.byKey(const Key('undo-button')));
