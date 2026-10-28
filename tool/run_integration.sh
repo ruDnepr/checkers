@@ -11,11 +11,20 @@ elif [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1"
   echo 'Эмулятор не закончил загрузку' >> /tmp/integration.txt
   status=1
 else
+  # The first Gradle build of a cold runner downloads plugins and CMake and can
+  # take minutes; warm it once here so the per-test runs stay fast and a slow
+  # download is never mistaken for a hung test.
+  echo '=== прогрев сборки' >> /tmp/integration.txt
+  if ! timeout --signal=KILL 900 flutter build apk --debug \
+    >> /tmp/integration.txt 2>&1; then
+    echo 'Сборка debug APK не удалась' >> /tmp/integration.txt
+    status=1
+  fi
   for file in integration_test/*_test.dart; do
     echo "=== $file" >> /tmp/integration.txt
     # A wedged emulator can leave `flutter test` waiting forever, so every run
     # is bounded and a failure still leaves the log for the annotations.
-    timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
+    timeout --signal=KILL 420 flutter test "$file" --reporter expanded \
       >> /tmp/integration.txt 2>&1 || status=1
   done
 fi
@@ -55,7 +64,28 @@ def emit(tag, text, keep=6):
             + chunk.replace('%', '%25').replace('\n', '%0A').replace('\r', '%0D')
         )
 
-emit('integration-output', Path('/tmp/integration.txt').read_text(errors='replace'))
+text = Path('/tmp/integration.txt').read_text(errors='replace')
+
+# A one-line verdict per file, so the failing scenario is visible at a glance.
+rows = []
+current = None
+passed = False
+for line in text.splitlines():
+    if line.startswith('=== integration_test/'):
+        if current:
+            rows.append(f'{current}: ' + ('ok' if passed else 'СБОЙ'))
+        current = line[len('=== '):]
+        passed = False
+    elif 'All tests passed!' in line:
+        passed = True
+if current:
+    rows.append(f'{current}: ' + ('ok' if passed else 'СБОЙ'))
+print(
+    '::error title=integration-summary::'
+    + '%0A'.join(rows).replace('%', '%25')
+)
+
+emit('integration-output', text)
 emit('device-output', Path('/tmp/device.txt').read_text(errors='replace'))
 PY
 fi
