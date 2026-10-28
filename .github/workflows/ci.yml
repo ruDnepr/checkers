@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The hosted emulator is not reliable enough to gate every commit: it hangs
+  # often enough that a run either times out or takes the whole runner. The
+  # device job therefore runs nightly and on demand, and the fast jobs are the
+  # gate for pull requests.
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 
 jobs:
   analyze-and-test:
@@ -205,6 +212,7 @@ jobs:
           fi
           exit ${status:-0}
   android-integration:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     # Boot (10 min) + one warm-up build (10 min) + four bounded test runs must
     # all fit inside this, otherwise the runner cancels the job at the cap.
