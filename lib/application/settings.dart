@@ -42,13 +42,18 @@ class SettingsController extends ChangeNotifier {
     await _preferences?.setBool('sound', value);
   }
 
+  /// Stores the name. The trimmed text is kept to 20 characters; an empty name
+  /// falls back to «Диана». Nothing is announced when the name did not change,
+  /// so the field that is being typed into is never rebuilt for nothing.
   Future<void> setNickname(String value) async {
     final trimmed = value.trim();
-    nickname = trimmed.isEmpty
+    final next = trimmed.isEmpty
         ? 'Диана'
         : String.fromCharCodes(trimmed.runes.take(20));
+    if (next == nickname) return;
+    nickname = next;
     notifyListeners();
-    await _preferences?.setString('nickname', nickname);
+    await _preferences?.setString('nickname', next);
   }
 
   Future<void> recordGame({required bool won}) async {

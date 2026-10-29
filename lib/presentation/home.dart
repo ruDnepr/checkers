@@ -399,45 +399,30 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: settings.nickname,
-                  maxLength: 20,
-                  textInputAction: TextInputAction.done,
-                  onChanged: settings.setNickname,
-                  decoration: InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: cream,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
+                _NameField(settings: settings),
               ],
             ),
           ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: () async {
-              final reset = await showDialog<bool>(
+              final reset = await showDianaDialog<bool>(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Сбросить прогресс?'),
-                  content: const Text(
-                    'Счётчик партий и побед станет равен нулю. Настройки останутся.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Не сейчас'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Сбросить'),
-                    ),
-                  ],
+                title: 'Сбросить прогресс?',
+                content: const Text(
+                  'Счётчик партий и побед станет равен нулю. '
+                  'Настройки останутся.',
+                  textAlign: TextAlign.center,
+                  style: dialogTextStyle,
                 ),
+                actions: const [
+                  DianaDialogButton<bool>(
+                    label: 'Не сейчас',
+                    value: false,
+                    primary: true,
+                  ),
+                  DianaDialogButton<bool>(label: 'Сбросить', value: true),
+                ],
               );
               if (reset == true) await settings.resetProgress();
             },
@@ -453,6 +438,103 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    ),
+  );
+}
+
+/// The player name.
+///
+/// The field keeps its own text while it is focused. Earlier the whole settings
+/// page was rebuilt on every keystroke and the name was written back into the
+/// field, so Android lost the text input connection and the keyboard closed —
+/// the name could not be changed at all. Now the text is committed when the
+/// child presses «Готово» or taps anywhere else.
+class _NameField extends StatefulWidget {
+  const _NameField({required this.settings});
+  final SettingsController settings;
+  @override
+  State<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends State<_NameField> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.settings.nickname,
+  );
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChanged);
+  }
+
+  /// Keeps the field in sight when the keyboard pushes the page up.
+  void _onFocusChanged() {
+    if (!_focus.hasFocus) {
+      _commit();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_focus.hasFocus) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: .35,
+        duration: const Duration(milliseconds: 250),
+      );
+    });
+  }
+
+  void _commit() {
+    unawaited(widget.settings.setNickname(_text.text));
+    // Show exactly what was stored: trimmed, and cut to twenty characters.
+    final stored = widget.settings.nickname;
+    if (_text.text != stored) {
+      _text.value = TextEditingValue(
+        text: stored,
+        selection: TextSelection.collapsed(offset: stored.length),
+      );
+    }
+  }
+
+  @override
+  void didUpdateWidget(_NameField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Another screen may have changed the name; never fight the typing child.
+    if (!_focus.hasFocus &&
+        widget.settings.nickname != oldWidget.settings.nickname &&
+        widget.settings.nickname != _text.text) {
+      _text.text = widget.settings.nickname;
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChanged);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    key: const Key('nickname-field'),
+    controller: _text,
+    focusNode: _focus,
+    maxLength: 20,
+    textCapitalization: TextCapitalization.words,
+    textInputAction: TextInputAction.done,
+    onSubmitted: (_) => _focus.unfocus(),
+    onTapOutside: (_) => _focus.unfocus(),
+    decoration: InputDecoration(
+      hintText: 'Например, Диана',
+      counterText: '',
+      filled: true,
+      fillColor: cream,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
     ),
   );

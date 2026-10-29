@@ -12,6 +12,9 @@ import 'network_page.dart';
 import 'setup_pages.dart';
 import 'theme.dart';
 
+/// What the player picked in the result dialog.
+enum _ResultChoice { again, undo, home }
+
 class GamePage extends StatefulWidget {
   const GamePage({
     super.key,
@@ -19,6 +22,7 @@ class GamePage extends StatefulWidget {
     required this.setup,
     this.animationPerLanding = const Duration(milliseconds: 350),
     this.initialState,
+    this.sounds,
   });
   final SettingsController settings;
   final GameSetup setup;
@@ -28,6 +32,10 @@ class GamePage extends StatefulWidget {
 
   /// Optional starting position; the game always starts from the initial one.
   final GameState? initialState;
+
+  /// Replaces the real audio output in tests, so the sound of every ending can
+  /// be checked without a device.
+  final GameSounds? sounds;
   @override
   State<GamePage> createState() => _GamePageState();
 }
@@ -38,6 +46,7 @@ class _GamePageState extends State<GamePage> {
     widget.settings,
     animationPerLanding: widget.animationPerLanding,
     initialState: widget.initialState,
+    sounds: widget.sounds,
   );
   bool resultShown = false;
   bool resultDialogOpen = false;
@@ -84,43 +93,36 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _showError() async {
-    await showDialog<void>(
+    await showDianaDialog<bool>(
       context: context,
+      title: 'Ой, что-то случилось',
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Ой, что-то случилось'),
-        content: Text(controller.fatalMessage ?? 'Связь потеряна.'),
-        actions: [
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _goHome();
-            },
-            child: const Text('В меню'),
-          ),
-        ],
+      content: Text(
+        controller.fatalMessage ?? 'Связь потеряна.',
+        textAlign: TextAlign.center,
+        style: dialogTextStyle,
       ),
+      actions: const [
+        DianaDialogButton<bool>(label: 'В меню', value: true, primary: true),
+      ],
     );
+    if (mounted) _goHome();
   }
 
   Future<void> _showUndoRequest() async {
-    final accepted = await showDialog<bool>(
+    final accepted = await showDianaDialog<bool>(
       context: context,
+      title: 'Друг просит отменить ход',
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Друг просит отменить ход'),
-        content: const Text('Разрешить вернуться на один ход назад?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Не сейчас'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Разрешить'),
-          ),
-        ],
+      content: const Text(
+        'Разрешить вернуться на один ход назад?',
+        textAlign: TextAlign.center,
+        style: dialogTextStyle,
       ),
+      actions: const [
+        DianaDialogButton<bool>(label: 'Разрешить', value: true, primary: true),
+        DianaDialogButton<bool>(label: 'Не сейчас', value: false),
+      ],
     );
     if (!mounted) return;
     undoDialogShown = false;
@@ -150,78 +152,65 @@ class _GamePageState extends State<GamePage> {
       ),
     );
     resultDialogOpen = true;
-    await showDialog<void>(
+    final choice = await showDianaDialog<_ResultChoice>(
       context: context,
+      title: draw
+          ? 'Ничья!'
+          : (widget.setup.mode == GameMode.local
+                ? '${winner!.label} победили!'
+                : (mine ? 'Ты молодец!' : 'Отличная партия!')),
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        contentPadding: const EdgeInsets.fromLTRB(24, 25, 24, 8),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _Celebration(calm: !mine),
-            const SizedBox(height: 12),
-            Text(
-              draw
-                  ? 'Ничья!'
-                  : (widget.setup.mode == GameMode.local
-                        ? '${winner!.label} победили!'
-                        : (mine ? 'Ты молодец!' : 'Отличная партия!')),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: ink,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              draw
-                  ? 'Никто не уступил: позиция повторилась или давно не было '
-                        'взятий. Сыграем ещё?'
-                  : (mine || widget.setup.mode == GameMode.local
-                        ? 'Здорово сыграно! Каждый ход был важен.'
-                        : 'В следующий раз обязательно получится!'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: muted,
-                fontWeight: FontWeight.w700,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          if (controller.canUndo)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                resultDialogOpen = false;
-                resultShown = false;
-                controller.undo();
-              },
-              child: const Text('Отменить ход'),
-            ),
-          TextButton(
-            onPressed: () {
-              _recordResult(mine);
-              Navigator.pop(dialogContext);
-              _goHome();
-            },
-            child: const Text('В меню'),
-          ),
-          FilledButton(
-            onPressed: () {
-              _recordResult(mine);
-              Navigator.pop(dialogContext);
-              _playAgain();
-            },
-            child: const Text('Играть снова'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _Celebration(calm: !mine),
+          const SizedBox(height: 14),
+          Text(
+            draw
+                ? 'Никто не уступил: позиция повторилась или давно не было '
+                      'взятий. Сыграем ещё?'
+                : (mine || widget.setup.mode == GameMode.local
+                      ? 'Здорово сыграно! Каждый ход был важен.'
+                      : 'В следующий раз обязательно получится!'),
+            textAlign: TextAlign.center,
+            style: dialogTextStyle,
           ),
         ],
       ),
+      actions: [
+        const DianaDialogButton<_ResultChoice>(
+          label: 'Играть снова',
+          value: _ResultChoice.again,
+          primary: true,
+        ),
+        if (controller.canUndo)
+          const DianaDialogButton<_ResultChoice>(
+            label: 'Отменить ход',
+            value: _ResultChoice.undo,
+          ),
+        const DianaDialogButton<_ResultChoice>(
+          label: 'В меню',
+          value: _ResultChoice.home,
+        ),
+      ],
     );
     resultDialogOpen = false;
+    if (!mounted) return;
+    switch (choice) {
+      case _ResultChoice.again:
+        _recordResult(mine);
+        await _playAgain();
+      case _ResultChoice.home:
+        _recordResult(mine);
+        _goHome();
+      case _ResultChoice.undo:
+        resultShown = false;
+        controller.undo();
+      case null:
+        // The barrier cannot be dismissed, so this only happens when the page
+        // is going away: leave the result as it is.
+        resultShown = false;
+    }
   }
 
   void _recordResult(bool won) {
@@ -273,24 +262,18 @@ class _GamePageState extends State<GamePage> {
 
   Future<void> _confirmExit() async {
     if (exiting) return;
-    final yes = await showDialog<bool>(
+    final yes = await showDianaDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Выйти из партии?'),
-        content: const Text(
-          'Текущая партия закончится. Можно будет начать новую!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Продолжить'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('В меню'),
-          ),
-        ],
+      title: 'Выйти из партии?',
+      content: const Text(
+        'Текущая партия закончится. Можно будет начать новую!',
+        textAlign: TextAlign.center,
+        style: dialogTextStyle,
       ),
+      actions: const [
+        DianaDialogButton<bool>(label: 'Продолжить', value: false, primary: true),
+        DianaDialogButton<bool>(label: 'В меню', value: true),
+      ],
     );
     if (!mounted || yes != true) return;
     if (widget.setup.mode == GameMode.network && !controller.isOver) {
@@ -300,22 +283,18 @@ class _GamePageState extends State<GamePage> {
   }
 
   Future<void> _confirmResign() async {
-    final yes = await showDialog<bool>(
+    final yes = await showDianaDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Закончить партию?'),
-        content: const Text('Если сдашься, победа достанется сопернику.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Продолжить'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Сдаться'),
-          ),
-        ],
+      title: 'Закончить партию?',
+      content: const Text(
+        'Если сдашься, победа достанется сопернику.',
+        textAlign: TextAlign.center,
+        style: dialogTextStyle,
       ),
+      actions: const [
+        DianaDialogButton<bool>(label: 'Продолжить', value: false, primary: true),
+        DianaDialogButton<bool>(label: 'Сдаться', value: true),
+      ],
     );
     if (mounted && yes == true) controller.resign();
   }
@@ -402,36 +381,40 @@ class _GamePageState extends State<GamePage> {
                     return LayoutBuilder(
                       builder: (context, constraints) {
                         // Everything except the board has a measured height, so
-                        // the board takes the rest and stays square: the page
-                        // does not scroll and no control is cut off. Only an
-                        // extremely short window scrolls instead.
+                        // the board takes what is left and stays square. Its
+                        // size therefore depends only on the window: a longer
+                        // hint, a piece selection or a new button never resize
+                        // it, which is what made the board shudder before.
                         final compact = constraints.maxHeight < 700;
-                        final tiny = constraints.maxHeight < 430;
-                        final board = _board();
+                        final tiny = constraints.maxHeight < 470;
+                        final gap = compact ? 8.0 : 12.0;
                         final panels = <Widget>[
                           _playerPanel(topSide, top: true, compact: compact),
-                          SizedBox(height: compact ? 8 : 12),
+                          SizedBox(height: gap),
                           if (tiny)
-                            AspectRatio(aspectRatio: 1, child: board)
+                            AspectRatio(aspectRatio: 1, child: _board)
                           else
                             Expanded(
                               child: Center(
                                 child: AspectRatio(
                                   aspectRatio: 1,
-                                  child: board,
+                                  child: _board,
                                 ),
                               ),
                             ),
-                          SizedBox(height: compact ? 8 : 12),
+                          SizedBox(height: gap),
                           _playerPanel(bottomSide, top: false, compact: compact),
-                          SizedBox(height: compact ? 8 : 12),
-                          _message(compact: compact),
-                          SizedBox(height: compact ? 8 : 12),
-                          _actions(compact: compact),
-                          if (!compact) ...[
-                            const SizedBox(height: 2),
-                            _secondaryActions(),
-                          ],
+                          SizedBox(height: gap),
+                          SizedBox(
+                            height: compact ? 58 : 66,
+                            child: _message(compact: compact),
+                          ),
+                          SizedBox(height: gap),
+                          SizedBox(
+                            height: _actionHeight(compact),
+                            child: _actions(compact: compact),
+                          ),
+                          if (!compact) ..._secondaryActions(),
                         ];
                         return Column(
                           children: [
@@ -471,11 +454,13 @@ class _GamePageState extends State<GamePage> {
     ),
   );
 
-  Widget _board() => Transform(
-    alignment: Alignment.center,
-    transform: Matrix4.identity()
-      ..setEntry(3, 2, .001)
-      ..rotateX(.025),
+  /// Height of the row with the main actions: one value for every state, so
+  /// the board above it never moves.
+  double _actionHeight(bool compact) => compact ? 46 : 54;
+
+  /// The board is built once. It paints itself from the controller through
+  /// Flame, so a rebuild of the page never has to touch it.
+  late final Widget _board = RepaintBoundary(
     child: Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
@@ -495,29 +480,37 @@ class _GamePageState extends State<GamePage> {
     ),
   );
 
-  Widget _secondaryActions() => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      TextButton.icon(
-        onPressed: _showHistory,
-        style: TextButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        icon: const Icon(Icons.history_rounded, size: 18),
-        label: const Text('История'),
+  /// The quiet links under the main buttons. The height is fixed so that the
+  /// board above them keeps its size when one of them becomes unavailable.
+  List<Widget> _secondaryActions() => [
+    const SizedBox(height: 2),
+    SizedBox(
+      height: 38,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TextButton.icon(
+            onPressed: _showHistory,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            icon: const Icon(Icons.history_rounded, size: 18),
+            label: const Text('История'),
+          ),
+          TextButton.icon(
+            onPressed: controller.isOver ? null : _confirmResign,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            icon: const Icon(Icons.flag_outlined, size: 18),
+            label: const Text('Сдаться'),
+          ),
+        ],
       ),
-      TextButton.icon(
-        onPressed: controller.isOver ? null : _confirmResign,
-        style: TextButton.styleFrom(
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        icon: const Icon(Icons.flag_outlined, size: 18),
-        label: const Text('Сдаться'),
-      ),
-    ],
-  );
+    ),
+  ];
 
   Widget _header({bool compact = false}) => Padding(
     padding: EdgeInsets.fromLTRB(6, compact ? 0 : 4, 6, 0),
@@ -622,11 +615,14 @@ class _GamePageState extends State<GamePage> {
     final title = compact
         ? '${_nameFor(side)} · ${controller.state.board.count(side)}'
         : _nameFor(side);
+    // A fixed height and an always-2-px border: an active panel used to grow by
+    // two pixels, and the board under it moved with every turn.
     Widget panel = Container(
       key: Key(top ? 'top-player-panel' : 'bottom-player-panel'),
+      height: compact ? 44 : 60,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 10 : 13,
-        vertical: compact ? 6 : 9,
+        vertical: compact ? 4 : 6,
       ),
       decoration: BoxDecoration(
         color: active
@@ -635,7 +631,7 @@ class _GamePageState extends State<GamePage> {
         borderRadius: BorderRadius.circular(compact ? 15 : 19),
         border: Border.all(
           color: active ? const Color(0xFFB9A3EF) : const Color(0xFFF1EAE5),
-          width: active ? 2 : 1,
+          width: 2,
         ),
       ),
       child: Row(
@@ -717,10 +713,13 @@ class _GamePageState extends State<GamePage> {
         'Ходят ${controller.state.turn == Side.white ? 'белые' : 'чёрные'}';
     final canDismiss =
         controller.notice != null || controller.hintText != null;
+    // The bubble fills the height the layout gave it, so its text never
+    // changes the size of the board above: at most three lines, then an
+    // ellipsis.
     return Container(
       key: const Key('message-bubble'),
       width: double.infinity,
-      padding: EdgeInsets.fromLTRB(12, compact ? 7 : 10, 6, compact ? 7 : 10),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
       decoration: BoxDecoration(
         color: hint ? const Color(0xFFFFE8A8) : const Color(0xFFFFF0CA),
         borderRadius: BorderRadius.circular(14),
@@ -736,7 +735,7 @@ class _GamePageState extends State<GamePage> {
           Expanded(
             child: Text(
               text,
-              maxLines: compact ? 2 : 3,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: compact ? 11.5 : 12,
@@ -781,50 +780,57 @@ class _GamePageState extends State<GamePage> {
       widget.settings.hintButton &&
       (controller.hintThinking || controller.canInteract);
 
-  Widget _actions({bool compact = false}) => Row(
-    children: [
-      Expanded(
-        child: _ActionButton(
-          key: const Key('undo-button'),
-          icon: Icons.undo_rounded,
-          label: 'Отменить ход',
-          enabled: controller.canUndo,
-          onTap: controller.undo,
-          height: compact ? 46 : 54,
-        ),
-      ),
-      if (_showHintButton) ...[
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ActionButton(
-            key: const Key('hint-button'),
-            icon: Icons.lightbulb_outline_rounded,
-            label: controller.hintThinking ? 'Думаю…' : 'Подсказка',
-            enabled: true,
-            onTap: controller.showHint,
-            highlighted: true,
-            height: compact ? 46 : 54,
+  /// Never more than two buttons in the row: each one keeps a full-size label
+  /// and a full-size tap target even on a narrow phone.
+  ///
+  /// While a capture series is being played the undo button is replaced by
+  /// «Закончить бой»: undoing a half-played series would quietly rewind the
+  /// opponent's move, and that is exactly when the child has a decision to
+  /// make.
+  Widget _actions({bool compact = false}) {
+    final height = _actionHeight(compact);
+    Widget? firstButton;
+    if (controller.canFinishCapture) {
+      firstButton = _ActionButton(
+        key: const Key('finish-capture-button'),
+        icon: Icons.done_all_rounded,
+        label: 'Закончить бой',
+        enabled: controller.canInteract,
+        onTap: controller.finishCapture,
+        highlighted: true,
+        height: height,
+      );
+    } else if (controller.selectedPath.isEmpty) {
+      // While a series is half played there is nothing to undo: rewinding it
+      // would quietly take back the opponent's move as well.
+      firstButton = _ActionButton(
+        key: const Key('undo-button'),
+        icon: Icons.undo_rounded,
+        label: 'Отменить ход',
+        enabled: controller.canUndo,
+        onTap: controller.undo,
+        height: height,
+      );
+    }
+    return Row(
+      children: [
+        if (firstButton != null) Expanded(child: firstButton),
+        if (firstButton != null && _showHintButton) const SizedBox(width: 10),
+        if (_showHintButton)
+          Expanded(
+            child: _ActionButton(
+              key: const Key('hint-button'),
+              icon: Icons.lightbulb_outline_rounded,
+              label: controller.hintThinking ? 'Думаю…' : 'Подсказка',
+              enabled: true,
+              onTap: controller.showHint,
+              highlighted: true,
+              height: height,
+            ),
           ),
-        ),
       ],
-      // Only Russian/giveaway let a man stop a series early, so this button
-      // appears exactly when the played series may be finished here.
-      if (controller.canFinishCapture) ...[
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ActionButton(
-            key: const Key('finish-capture-button'),
-            icon: Icons.done_all_rounded,
-            label: 'Закончить бой',
-            enabled: controller.canInteract,
-            onTap: controller.finishCapture,
-            highlighted: true,
-            height: compact ? 46 : 54,
-          ),
-        ),
-      ],
-    ],
-  );
+    );
+  }
 }
 
 class _ActionButton extends StatelessWidget {
@@ -842,19 +848,39 @@ class _ActionButton extends StatelessWidget {
   final bool enabled, highlighted;
   final double height;
   final VoidCallback onTap;
+
+  /// The label keeps its size and is cut with an ellipsis instead of being
+  /// shrunk: a squeezed 8-point text was one of the complaints.
   @override
   Widget build(BuildContext context) => SizedBox(
     height: height,
-    child: FilledButton.icon(
+    child: FilledButton(
       onPressed: enabled ? onTap : null,
-      icon: Icon(icon, size: 21),
-      label: FittedBox(child: Text(label)),
       style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         backgroundColor: highlighted ? purple : Colors.white,
         foregroundColor: highlighted ? Colors.white : ink,
         disabledBackgroundColor: const Color(0xFFEFE9E5),
         disabledForegroundColor: const Color(0xFFB4ACAF),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: height >= 52 ? 21 : 18),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: height >= 52 ? 16 : 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );

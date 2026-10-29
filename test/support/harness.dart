@@ -1,5 +1,6 @@
 import 'package:checkers_for_diana/application/game_controller.dart';
 import 'package:checkers_for_diana/application/settings.dart';
+import 'package:checkers_for_diana/application/sounds.dart';
 import 'package:checkers_for_diana/domain/models.dart';
 import 'package:checkers_for_diana/network/network_game_service.dart';
 import 'package:checkers_for_diana/presentation/board_game.dart';
@@ -23,6 +24,8 @@ Future<GameController> pumpGame(
   GameMode mode = GameMode.local,
   Side playerSide = Side.white,
   NetworkGameService? network,
+  // Replaces the audio output, so a test can check which sound would play.
+  GameSounds? sounds,
   Size size = const Size(400, 1000),
   Duration animationPerLanding = const Duration(milliseconds: 20),
 }) async {
@@ -35,6 +38,7 @@ Future<GameController> pumpGame(
       child: MaterialApp(
         home: GamePage(
           settings: settings,
+          sounds: sounds,
           initialState: state,
           animationPerLanding: animationPerLanding,
           setup: GameSetup(

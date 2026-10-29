@@ -239,11 +239,14 @@ class _GuessPageState extends State<GuessPage>
   int? chosen;
   Timer? _timer;
 
+  /// One instance for the page, so the repeated-draw guard works.
+  late final GameSounds _sounds = GameSounds(widget.settings);
+
   void _choose(int hand) {
     if (chosen != null) return;
     setState(() => chosen = hand);
     final guessed = hand == hiddenHand;
-    GameSounds(widget.settings).play(guessed ? 'guess' : 'miss');
+    _sounds.play(guessed ? GameSound.guess : GameSound.miss);
     _timer = Timer(widget.revealDelay, () {
       if (mounted) Navigator.pop(context, guessed ? Side.white : Side.black);
     });
