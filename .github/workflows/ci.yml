@@ -5,22 +5,25 @@ name: Flutter
 #   * ios     — сборка приложения для симулятора без подписи.
 #
 # Тесты на эмуляторе Android — шаг внутри задания android. Эмулятор на общих
-# раннерах часто не загружается, поэтому этот шаг не блокирует сборку и
-# запускается только по расписанию, вручную или меткой `device` на pull request.
+# раннерах часто не загружается, поэтому шаг не блокирует сборку и запускается
+# только вручную через `Run workflow`.
 
 on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
-  schedule:
-    - cron: '0 3 * * *'
+    types: [opened, synchronize, reopened]
+  # Тесты на эмуляторе запускаются только вручную, чтобы один коммит не
+  # поднимал лишние прогоны.
   workflow_dispatch:
+
+# Новый коммит отменяет предыдущий прогон той же ветки.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: '3.47.8'
-  # Where the widget test writes layout screenshots when DIANA_CAPTURE=1.
-  SCREENSHOT_DIR: build/screenshots
 
 jobs:
   android:
@@ -69,8 +72,6 @@ jobs:
 
       - name: Тесты
         shell: bash
-        env:
-          DIANA_CAPTURE: '1'
         run: |
           flutter test --reporter expanded > /tmp/tests.txt 2>&1 || status=$?
           cat /tmp/tests.txt
@@ -137,14 +138,6 @@ jobs:
           test -f build/app/outputs/flutter-apk/app-debug.apk
           test -f build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Сложить скриншоты раскладки
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p "$SCREENSHOT_DIR"
-          cp /tmp/diana-*.png "$SCREENSHOT_DIR"/ 2>/dev/null || true
-          ls -l "$SCREENSHOT_DIR" || true
-
       - name: Выгрузить APK
         if: always()
         uses: actions/upload-artifact@v4
@@ -153,21 +146,8 @@ jobs:
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: warn
 
-      - name: Выгрузить скриншоты
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: diana-checkers-screenshots
-          path: build/screenshots
-          if-no-files-found: ignore
-
       - name: Включить ускорение эмулятора
-        if: >-
-          github.event_name == 'workflow_dispatch' ||
-          github.event_name == 'schedule' ||
-          (github.event_name == 'pull_request' &&
-          github.event.action == 'labeled' &&
-          contains(github.event.pull_request.labels.*.name, 'device'))
+        if: github.event_name == 'workflow_dispatch'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -175,12 +155,7 @@ jobs:
 
       # Совещательный шаг: результат виден в аннотациях, но не блокирует APK.
       - name: Тесты на эмуляторе Android
-        if: >-
-          github.event_name == 'workflow_dispatch' ||
-          github.event_name == 'schedule' ||
-          (github.event_name == 'pull_request' &&
-          github.event.action == 'labeled' &&
-          contains(github.event.pull_request.labels.*.name, 'device'))
+        if: github.event_name == 'workflow_dispatch'
         continue-on-error: true
         # Предел шага больше суммы пределов внутри скрипта (загрузка эмулятора
         # 10 мин + прогрев 7 мин + 4 теста по 3 мин), чтобы зависший эмулятор
