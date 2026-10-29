@@ -221,9 +221,10 @@ jobs:
       (github.event_name == 'pull_request' &&
       contains(github.event.pull_request.labels.*.name, 'device'))
     runs-on: ubuntu-latest
-    # Boot (10 min) + one warm-up build (10 min) + four bounded test runs must
-    # all fit inside this, otherwise the runner cancels the job at the cap.
-    timeout-minutes: 50
+    # Every step inside the script is bounded, so this cap only exists to stop
+    # a wedged emulator. It is deliberately larger than the sum of those bounds:
+    # a job cut by its own cap is reported as "cancelled", which hides the log.
+    timeout-minutes: 90
     # Hosted runners sometimes hand out a machine without working KVM and the
     # emulator never boots. The job is advisory: it publishes the device log in
     # the check annotations, but builds, analysis and tests stay the gate.
