@@ -41,18 +41,36 @@ class MoveAnimation {
 }
 
 class _SearchRequest {
-  const _SearchRequest(this.state, this.depth, this.noise, this.materialOnly);
+  const _SearchRequest(
+    this.state,
+    this.depth,
+    this.noise,
+    this.materialOnly, {
+    this.budgetMs = 0,
+    this.nodeBudget = 50000,
+  });
   final GameState state;
   final int depth;
   final bool noise;
   final bool materialOnly;
+
+  /// Wall-clock budget for the whole search. Above zero the search deepens
+  /// further while the budget lasts (used by the hint) instead of stopping at
+  /// exactly [depth].
+  final int budgetMs;
+  final int nodeBudget;
 }
 
-Move? _searchMove(_SearchRequest request) => CheckersAI().findBestMove(
+Move? _searchMove(_SearchRequest request) => CheckersAI(
+  nodeBudget: request.nodeBudget,
+).findBestMove(
   request.state,
   request.depth,
   easyNoise: request.noise,
   materialOnly: request.materialOnly,
+  budget: request.budgetMs > 0
+      ? Duration(milliseconds: request.budgetMs)
+      : null,
 );
 
 class GameController extends ChangeNotifier {
@@ -109,9 +127,34 @@ class GameController extends ChangeNotifier {
       (legalMoves.isEmpty || state.board.count(state.turn) == 0
           ? (state.variant.reverseGoal ? state.turn : state.turn.opponent)
           : null);
+
+  /// The current position (same board, same side to move) seen this many times.
+  int _repetitions = 1;
+
+  /// How many quiet plies in a row make a draw: when only kings are left the
+  /// series may be twice as long as the one with simple pieces on the board.
+  int get quietLimit => state.board.pieces.values.any((piece) => !piece.king)
+      ? drawQuietPlies
+      : drawQuietPliesKings;
+
+  /// Draw by the third repetition of a position or by a long series of quiet
+  /// plies (variant Б). Both sides compute it from the same move list, so a
+  /// network game reaches the same verdict without extra messages.
+  bool get isDraw =>
+      winner == null &&
+      (_repetitions >= drawRepetitions || state.quietPlies >= quietLimit);
+  bool get isOver => winner != null || isDraw;
+
+  /// True while the game waits for this player's move. The hints button is
+  /// shown only then, so a disabled button never appears on the screen.
+  bool get isMyTurn =>
+      !isOver &&
+      fatalMessage == null &&
+      (setup.mode == GameMode.local || state.turn == setup.playerSide);
+
   bool get isAnimating => animation != null;
   bool get canInteract =>
-      winner == null &&
+      !isOver &&
       fatalMessage == null &&
       !isAnimating &&
       !computerThinking &&
@@ -191,7 +234,21 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  void _refresh() => legalMoves = rules.legalMoves(state);
+  void _refresh() {
+    legalMoves = rules.legalMoves(state);
+    _repetitions = _countRepetitions();
+  }
+
+  /// Counts the current position among the played states plus the current one.
+  int _countRepetitions() {
+    final key = state.positionKey;
+    var count = 1;
+    for (final past in _history) {
+      if (past.positionKey == key) count++;
+    }
+    return count;
+  }
+
   void _settingsChanged() {
     if (!settings.hints) {
       suggestedMove = null;
@@ -330,9 +387,23 @@ class GameController extends ChangeNotifier {
     notice = null;
     _notify();
     try {
-      // The hint always searches two plies with the full heuristic, which is
-      // stronger than the easy opponent and is what a child should copy.
-      final move = await compute(
+      // The hint deepens until the time budget is spent (up to six plies), so
+      // it sees the opponent's answer and the capture that follows it. The
+      // search runs in an isolate, therefore the wait never blocks the UI.
+      var move = await compute(
+        _searchMove,
+        _SearchRequest(
+          snapshot,
+          6,
+          false,
+          false,
+          budgetMs: 1200,
+          nodeBudget: 400000,
+        ),
+      );
+      // A slow device may not finish even the first pass in time; a plain
+      // two-ply search then answers, so the button never does nothing.
+      move ??= await compute(
         _searchMove,
         _SearchRequest(snapshot, 2, false, false),
       );
@@ -394,17 +465,14 @@ class GameController extends ChangeNotifier {
       }
     }
     _notify();
-    if (winner != null || fatalMessage != null) return;
+    if (isOver || fatalMessage != null) return;
     if (setup.mode == GameMode.computer && state.turn != setup.playerSide) {
       _startComputer();
     }
   }
 
   void _startComputer() {
-    if (_disposed ||
-        computerThinking ||
-        winner != null ||
-        fatalMessage != null) {
+    if (_disposed || computerThinking || isOver || fatalMessage != null) {
       return;
     }
     computerThinking = true;
@@ -506,7 +574,7 @@ class GameController extends ChangeNotifier {
   }
 
   void resign() {
-    if (winner != null || fatalMessage != null) return;
+    if (isOver || fatalMessage != null) return;
     if (setup.mode == GameMode.network) {
       try {
         setup.network!.send(const NetworkMessage('resign'));
@@ -594,7 +662,7 @@ class GameController extends ChangeNotifier {
         fatalMessage = 'Партии перестали совпадать. Начните новую игру.';
         _notify();
       case 'disconnected':
-        if (_resignedWinner == null && winner == null) {
+        if (!isOver) {
           fatalMessage = 'Связь потеряна. Вернись в меню и попробуй ещё раз.';
           _notify();
         }

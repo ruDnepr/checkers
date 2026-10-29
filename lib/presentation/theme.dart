@@ -135,13 +135,20 @@ class Eyebrow extends StatelessWidget {
     super.key,
     this.color = purple,
     this.background = const Color(0xFFEDE6FF),
+    this.fontSize = 11,
   });
   final String label;
   final Color color;
   final Color background;
+
+  /// Smaller on compact screens where the panel is a single line.
+  final double fontSize;
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+    padding: EdgeInsets.symmetric(
+      horizontal: fontSize < 10 ? 9 : 12,
+      vertical: fontSize < 10 ? 4 : 7,
+    ),
     decoration: BoxDecoration(
       color: background,
       borderRadius: BorderRadius.circular(30),
@@ -151,7 +158,7 @@ class Eyebrow extends StatelessWidget {
       textAlign: TextAlign.center,
       style: TextStyle(
         color: color,
-        fontSize: 11,
+        fontSize: fontSize,
         fontWeight: FontWeight.w900,
         letterSpacing: .8,
       ),

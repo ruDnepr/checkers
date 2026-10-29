@@ -2,6 +2,16 @@ import 'dart:async';
 import 'package:flame_audio/flame_audio.dart';
 import 'settings.dart';
 
+/// The sound that matches the end of a game for this player. A draw has its own
+/// calm tone; otherwise the winner hears the win sound and the loser a softer
+/// falling one. In a two-player game on one device somebody always won, so
+/// there the win sound is played.
+String resultSoundName({
+  required bool draw,
+  required bool local,
+  required bool iWon,
+}) => draw ? 'draw' : (local || iWon ? 'win' : 'lose');
+
 class GameSounds {
   const GameSounds(this.settings);
   final SettingsController settings;

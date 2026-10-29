@@ -79,6 +79,50 @@ void main() {
     expect(settings.gamesWon, 0);
   });
 
+  testWidgets('проигравший видит спокойный результат без фейерверка', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settings = SettingsController()..sound = false;
+    addTearDown(settings.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: GamePage(
+            settings: settings,
+            animationPerLanding: const Duration(milliseconds: 20),
+            setup: const GameSetup(
+              variant: GameVariant.russian,
+              mode: GameMode.computer,
+              playerSide: Side.white,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    // Resigning against the computer means losing, so the player gets the calm
+    // text and — see resultSoundName — the softer losing sound.
+    await tester.tap(find.text('Сдаться'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Сдаться'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Отличная партия!'), findsOneWidget);
+    expect(find.text('В следующий раз обязательно получится!'), findsOneWidget);
+  });
+
   testWidgets('международная доска 10×10 без подсказок сохраняет ходы', (
     tester,
   ) async {
