@@ -291,6 +291,112 @@ void main() {
     );
   });
 
+  test('тихие полуходы: ход дамки считается, ход шашки и взятие — нет', () {
+    // A king that just walks keeps the quiet series growing.
+    final kingState = position(GameVariant.russian, {
+      const Square(5, 2): const Piece(Side.white, king: true),
+      const Square(0, 1): const Piece(Side.black, king: true),
+    });
+    final kingMove = RussianRules()
+        .legalMoves(kingState)
+        .firstWhere(
+          (m) => m.from == const Square(5, 2) && !m.isCapture,
+        );
+    expect(
+      RussianRules().applyKnownLegal(kingState, kingMove).quietPlies,
+      1,
+    );
+
+    // A move of a simple piece breaks the series, even without a capture.
+    final manState = position(GameVariant.russian, {
+      const Square(5, 2): const Piece(Side.white),
+      const Square(2, 1): const Piece(Side.black),
+    });
+    final manMove = RussianRules()
+        .legalMoves(manState)
+        .firstWhere((m) => m.from == const Square(5, 2) && !m.isCapture);
+    expect(RussianRules().applyKnownLegal(manState, manMove).quietPlies, 0);
+    expect(
+      RussianRules()
+          .applyKnownLegal(
+            GameState(
+              variant: manState.variant,
+              board: manState.board,
+              turn: manState.turn,
+              quietPlies: 12,
+            ),
+            manMove,
+          )
+          .quietPlies,
+      0,
+    );
+
+    // A capture breaks it as well.
+    final captureState = position(GameVariant.russian, {
+      const Square(5, 0): const Piece(Side.white, king: true),
+      const Square(4, 1): const Piece(Side.black),
+    });
+    final capture = RussianRules().legalMoves(captureState).first;
+    expect(capture.isCapture, isTrue);
+    expect(
+      RussianRules()
+          .applyKnownLegal(
+            GameState(
+              variant: captureState.variant,
+              board: captureState.board,
+              turn: captureState.turn,
+              quietPlies: 7,
+            ),
+            capture,
+          )
+          .quietPlies,
+      0,
+    );
+  });
+
+  test('одинаковые позиции дают одинаковый ключ повторения', () {
+    final board = Board(GameVariant.russian.boardSize, {
+      const Square(5, 2): const Piece(Side.white, king: true),
+      const Square(0, 1): const Piece(Side.black, king: true),
+    });
+    final first = GameState(
+      variant: GameVariant.russian,
+      board: board,
+      turn: Side.white,
+    );
+    final later = GameState(
+      variant: GameVariant.russian,
+      board: board,
+      turn: Side.white,
+      ply: 12,
+    );
+    expect(later.positionKey, first.positionKey);
+    final otherTurn = GameState(
+      variant: GameVariant.russian,
+      board: board,
+      turn: Side.black,
+    );
+    expect(otherTurn.positionKey, isNot(first.positionKey));
+    final otherVariant = GameState(
+      variant: GameVariant.classic,
+      board: Board(GameVariant.classic.boardSize, board.pieces),
+      turn: Side.white,
+    );
+    expect(otherVariant.positionKey, isNot(first.positionKey));
+    final movedBoard = Board(GameVariant.russian.boardSize, {
+      const Square(4, 1): const Piece(Side.white, king: true),
+      const Square(0, 1): const Piece(Side.black, king: true),
+    });
+    expect(
+      GameState(
+        variant: GameVariant.russian,
+        board: movedBoard,
+        turn: Side.white,
+      ).positionKey,
+      isNot(first.positionKey),
+    );
+  });
+
   test('ход проходит JSON round-trip и защищён от некорректных данных', () {
     final move = Move(
       from: const Square(5, 0),

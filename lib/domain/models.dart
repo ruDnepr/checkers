@@ -171,12 +171,22 @@ class Board {
       pieces.values.where((piece) => piece.side == side).length;
 }
 
+/// Draw rules of variant Б, shared by every variant: the same position with the
+/// same side to move seen [drawRepetitions] times, or [drawQuietPlies] quiet
+/// plies in a row — 15 moves for each side without a capture and without a move
+/// of a simple piece. Only kings left on the board make it [drawQuietPliesKings]
+/// plies (30 moves for each side), because a king ending can wander for long.
+const drawRepetitions = 3;
+const drawQuietPlies = 30;
+const drawQuietPliesKings = 60;
+
 class GameState {
   const GameState({
     required this.variant,
     required this.board,
     required this.turn,
     this.ply = 0,
+    this.quietPlies = 0,
   });
 
   factory GameState.initial(GameVariant variant) => GameState(
@@ -190,8 +200,18 @@ class GameState {
   final Side turn;
   final int ply;
 
+  /// Plies in a row without a capture and without a move of a simple piece.
+  /// Used for the draw by a long quiet series (variant Б).
+  final int quietPlies;
+
+  /// Board and side to move only, without the move counter: two positions that
+  /// differ only in [ply] are the same position for the repetition rule.
+  String get positionKey => _positionHash(includePly: false);
+
   /// A stable protocol fingerprint, independent of map iteration order.
-  String get fingerprint {
+  String get fingerprint => _positionHash(includePly: true);
+
+  String _positionHash({required bool includePly}) {
     var hash = 0x811c9dc5;
     void mix(int n) {
       hash = ((hash ^ n) * 0x01000193) & 0xffffffff;
@@ -199,7 +219,7 @@ class GameState {
 
     mix(variant.index);
     mix(turn.index);
-    mix(ply);
+    if (includePly) mix(ply);
     for (var row = 0; row < board.size; row++) {
       for (var col = 0; col < board.size; col++) {
         final piece = board.at(Square(row, col));

@@ -23,6 +23,11 @@ extension DifficultyDetails on Difficulty {
   bool get materialOnly => this == Difficulty.easy;
 }
 
+/// Thrown internally when the time budget of a search runs out.
+class _SearchAborted implements Exception {
+  const _SearchAborted();
+}
+
 /// Minimax over complete turns, with alpha-beta pruning and a bounded search.
 /// The budget keeps difficult 10×10 positions responsive on mobile devices.
 class CheckersAI {
@@ -31,14 +36,53 @@ class CheckersAI {
   final Random _random;
   final int nodeBudget;
   int _nodes = 0;
+  DateTime? _deadline;
+
+  /// Depth of the last fully completed search. With a time budget the search
+  /// deepens until the budget is spent, and this reports how far it got.
+  int lastDepth = 0;
 
   Move? findBestMove(
     GameState state,
     int depth, {
     bool easyNoise = false,
     bool materialOnly = false,
+    Duration? budget,
   }) {
     if (depth < 1) throw ArgumentError.value(depth, 'depth');
+    if (budget == null) {
+      final move = _searchRoot(state, depth, easyNoise, materialOnly);
+      lastDepth = move == null ? 0 : depth;
+      return move;
+    }
+    // Iterative deepening: every completed pass replaces the answer, and a pass
+    // cut by the budget is discarded, so the result is the deepest finished one.
+    _deadline = DateTime.now().add(budget);
+    lastDepth = 0;
+    Move? best;
+    try {
+      for (var pass = depth < 2 ? 1 : 2; pass <= depth; pass++) {
+        final move = _searchRoot(state, pass, easyNoise, materialOnly);
+        if (move != null) {
+          best = move;
+          lastDepth = pass;
+        }
+      }
+    } on _SearchAborted {
+      // A pass that ran out of time is dropped, so the answer of the last
+      // finished pass stays.
+    } finally {
+      _deadline = null;
+    }
+    return best;
+  }
+
+  Move? _searchRoot(
+    GameState state,
+    int depth,
+    bool easyNoise,
+    bool materialOnly,
+  ) {
     _nodes = 0;
     final rules = GameRules.forVariant(state.variant) as StandardRules;
     final legal = rules.legalMoves(state);
@@ -58,7 +102,8 @@ class CheckersAI {
         root,
         materialOnly,
       );
-      // A little variety only affects the easy opponent, never a requested hint.
+      // A little variety only affects the easy opponent, never a request for
+      // a hint.
       if (easyNoise && score.abs() < 100000) {
         score += (_random.nextDouble() - 0.5) * 0.5;
       }
@@ -81,6 +126,9 @@ class CheckersAI {
     bool materialOnly,
   ) {
     _nodes++;
+    if (_deadline != null && (_nodes & 0x3F) == 0) {
+      if (DateTime.now().isAfter(_deadline!)) throw const _SearchAborted();
+    }
     final legal = rules.legalMoves(state);
     if (legal.isEmpty || state.board.count(state.turn) == 0) {
       final winner = state.variant.reverseGoal

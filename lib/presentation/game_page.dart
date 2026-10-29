@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/game_controller.dart';
 import '../application/settings.dart';
+import '../application/sounds.dart';
 import '../domain/models.dart';
 import 'board_game.dart';
 import 'network_page.dart';
@@ -69,7 +70,7 @@ class _GamePageState extends State<GamePage> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showUndoRequest();
       });
-    } else if (controller.winner != null &&
+    } else if (controller.isOver &&
         !controller.isAnimating &&
         !resultShown &&
         !controller.waitingForUndo &&
@@ -133,12 +134,21 @@ class _GamePageState extends State<GamePage> {
 
   Future<void> _showResult() async {
     final winner = controller.winner;
-    if (winner == null) {
+    final draw = winner == null && controller.isDraw;
+    if (winner == null && !draw) {
       resultShown = false;
       return;
     }
-    final mine = winner == widget.setup.playerSide;
-    controller.sounds.play('win');
+    final mine = winner != null && winner == widget.setup.playerSide;
+    // Each ending has its own sound: a win, a soft loss and a calm draw. In a
+    // two-player game on one device somebody always won, so it is a win sound.
+    controller.sounds.play(
+      resultSoundName(
+        draw: draw,
+        local: widget.setup.mode == GameMode.local,
+        iWon: mine,
+      ),
+    );
     resultDialogOpen = true;
     await showDialog<void>(
       context: context,
@@ -148,12 +158,14 @@ class _GamePageState extends State<GamePage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const _Celebration(),
+            _Celebration(calm: !mine),
             const SizedBox(height: 12),
             Text(
-              widget.setup.mode == GameMode.local
-                  ? '${winner.label} победили!'
-                  : (mine ? 'Ты молодец!' : 'Отличная партия!'),
+              draw
+                  ? 'Ничья!'
+                  : (widget.setup.mode == GameMode.local
+                        ? '${winner!.label} победили!'
+                        : (mine ? 'Ты молодец!' : 'Отличная партия!')),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 24,
@@ -163,9 +175,12 @@ class _GamePageState extends State<GamePage> {
             ),
             const SizedBox(height: 8),
             Text(
-              mine || widget.setup.mode == GameMode.local
-                  ? 'Здорово сыграно! Каждый ход был важен.'
-                  : 'В следующий раз обязательно получится!',
+              draw
+                  ? 'Никто не уступил: позиция повторилась или давно не было '
+                        'взятий. Сыграем ещё?'
+                  : (mine || widget.setup.mode == GameMode.local
+                        ? 'Здорово сыграно! Каждый ход был важен.'
+                        : 'В следующий раз обязательно получится!'),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: muted,
@@ -278,7 +293,7 @@ class _GamePageState extends State<GamePage> {
       ),
     );
     if (!mounted || yes != true) return;
-    if (widget.setup.mode == GameMode.network && controller.winner == null) {
+    if (widget.setup.mode == GameMode.network && !controller.isOver) {
       controller.resign();
     }
     _goHome();
@@ -384,83 +399,67 @@ class _GamePageState extends State<GamePage> {
                   builder: (context, _) {
                     final topSide = flipped ? Side.white : Side.black;
                     final bottomSide = topSide.opponent;
-                    return Column(
-                      children: [
-                        _header(),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
-                            child: Column(
-                              children: [
-                                _playerPanel(topSide, top: true),
-                                const SizedBox(height: 12),
-                                Transform(
-                                  alignment: Alignment.center,
-                                  transform: Matrix4.identity()
-                                    ..setEntry(3, 2, .001)
-                                    ..rotateX(.025),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF8B552E),
-                                      borderRadius: BorderRadius.circular(13),
-                                      border: Border.all(
-                                        color: const Color(0xFFB77A3D),
-                                        width: 2,
-                                      ),
-                                      boxShadow: const [
-                                        BoxShadow(
-                                          color: Color(0xFF613D23),
-                                          offset: Offset(0, 7),
-                                        ),
-                                        BoxShadow(
-                                          color: Color(0x446B492D),
-                                          blurRadius: 20,
-                                          offset: Offset(0, 15),
-                                        ),
-                                      ],
-                                    ),
-                                    child: BoardView(
-                                      controller: controller,
-                                      flipped: flipped,
-                                    ),
-                                  ),
+                    return LayoutBuilder(
+                      builder: (context, constraints) {
+                        // Everything except the board has a measured height, so
+                        // the board takes the rest and stays square: the page
+                        // does not scroll and no control is cut off. Only an
+                        // extremely short window scrolls instead.
+                        final compact = constraints.maxHeight < 700;
+                        final tiny = constraints.maxHeight < 430;
+                        final board = _board();
+                        final panels = <Widget>[
+                          _playerPanel(topSide, top: true, compact: compact),
+                          SizedBox(height: compact ? 8 : 12),
+                          if (tiny)
+                            AspectRatio(aspectRatio: 1, child: board)
+                          else
+                            Expanded(
+                              child: Center(
+                                child: AspectRatio(
+                                  aspectRatio: 1,
+                                  child: board,
                                 ),
-                                const SizedBox(height: 18),
-                                _playerPanel(bottomSide, top: false),
-                                const SizedBox(height: 16),
-                                _message(),
-                                const SizedBox(height: 16),
-                                _actions(),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    TextButton.icon(
-                                      onPressed: _showHistory,
-                                      icon: const Icon(
-                                        Icons.history_rounded,
-                                        size: 19,
-                                      ),
-                                      label: const Text('История'),
-                                    ),
-                                    TextButton.icon(
-                                      onPressed: controller.winner == null
-                                          ? _confirmResign
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.flag_outlined,
-                                        size: 19,
-                                      ),
-                                      label: const Text('Сдаться'),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
+                          SizedBox(height: compact ? 8 : 12),
+                          _playerPanel(bottomSide, top: false, compact: compact),
+                          SizedBox(height: compact ? 8 : 12),
+                          _message(compact: compact),
+                          SizedBox(height: compact ? 8 : 12),
+                          _actions(compact: compact),
+                          if (!compact) ...[
+                            const SizedBox(height: 2),
+                            _secondaryActions(),
+                          ],
+                        ];
+                        return Column(
+                          children: [
+                            _header(compact: compact),
+                            Expanded(
+                              child: tiny
+                                  ? SingleChildScrollView(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        2,
+                                        16,
+                                        10,
+                                      ),
+                                      child: Column(children: panels),
+                                    )
+                                  : Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        16,
+                                        2,
+                                        16,
+                                        compact ? 8 : 14,
+                                      ),
+                                      child: Column(children: panels),
+                                    ),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
                 ),
@@ -472,13 +471,62 @@ class _GamePageState extends State<GamePage> {
     ),
   );
 
-  Widget _header() => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+  Widget _board() => Transform(
+    alignment: Alignment.center,
+    transform: Matrix4.identity()
+      ..setEntry(3, 2, .001)
+      ..rotateX(.025),
+    child: Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF8B552E),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFB77A3D), width: 2),
+        boxShadow: const [
+          BoxShadow(color: Color(0xFF613D23), offset: Offset(0, 6)),
+          BoxShadow(
+            color: Color(0x446B492D),
+            blurRadius: 18,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: BoardView(controller: controller, flipped: flipped),
+    ),
+  );
+
+  Widget _secondaryActions() => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      TextButton.icon(
+        onPressed: _showHistory,
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        icon: const Icon(Icons.history_rounded, size: 18),
+        label: const Text('История'),
+      ),
+      TextButton.icon(
+        onPressed: controller.isOver ? null : _confirmResign,
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        icon: const Icon(Icons.flag_outlined, size: 18),
+        label: const Text('Сдаться'),
+      ),
+    ],
+  );
+
+  Widget _header({bool compact = false}) => Padding(
+    padding: EdgeInsets.fromLTRB(6, compact ? 0 : 4, 6, 0),
     child: Row(
       children: [
         IconButton(
           onPressed: _confirmExit,
           tooltip: 'Назад в меню',
+          visualDensity: compact ? VisualDensity.compact : null,
           icon: const Icon(Icons.arrow_back_rounded, color: ink),
         ),
         Expanded(
@@ -488,8 +536,8 @@ class _GamePageState extends State<GamePage> {
                 widget.setup.variant.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
+                style: TextStyle(
+                  fontSize: compact ? 14 : 16,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -500,7 +548,7 @@ class _GamePageState extends State<GamePage> {
                           ? 'Два игрока'
                           : 'Против компьютера'),
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: muted,
                   fontWeight: FontWeight.w800,
                 ),
@@ -511,6 +559,7 @@ class _GamePageState extends State<GamePage> {
         ListenableBuilder(
           listenable: widget.settings,
           builder: (context, _) => Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               // Shows or hides only the «Подсказка» button under the board.
               // With the hints setting off there is nothing to show, so the
@@ -521,6 +570,7 @@ class _GamePageState extends State<GamePage> {
                   tooltip: widget.settings.hintButton
                       ? 'Скрыть кнопку «Подсказка»'
                       : 'Показать кнопку «Подсказка»',
+                  visualDensity: compact ? VisualDensity.compact : null,
                   onPressed: () => widget.settings.setHintButton(
                     !widget.settings.hintButton,
                   ),
@@ -537,6 +587,7 @@ class _GamePageState extends State<GamePage> {
                 tooltip: widget.settings.sound
                     ? 'Выключить звук'
                     : 'Включить звук',
+                visualDensity: compact ? VisualDensity.compact : null,
                 onPressed: () =>
                     widget.settings.setSound(!widget.settings.sound),
                 icon: Icon(
@@ -565,16 +616,23 @@ class _GamePageState extends State<GamePage> {
         : (network.config?.hostName ?? 'Друг');
   }
 
-  Widget _playerPanel(Side side, {required bool top}) {
-    final active = controller.state.turn == side && controller.winner == null;
+  Widget _playerPanel(Side side, {required bool top, bool compact = false}) {
+    final active = controller.state.turn == side && !controller.isOver;
+    // On a short screen the panel is one line: name and piece count together.
+    final title = compact
+        ? '${_nameFor(side)} · ${controller.state.board.count(side)}'
+        : _nameFor(side);
     Widget panel = Container(
       key: Key(top ? 'top-player-panel' : 'bottom-player-panel'),
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 13,
+        vertical: compact ? 6 : 9,
+      ),
       decoration: BoxDecoration(
         color: active
             ? const Color(0xFFEDE5FD)
             : Colors.white.withValues(alpha: .8),
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(compact ? 15 : 19),
         border: Border.all(
           color: active ? const Color(0xFFB9A3EF) : const Color(0xFFF1EAE5),
           width: active ? 2 : 1,
@@ -582,35 +640,49 @@ class _GamePageState extends State<GamePage> {
       ),
       child: Row(
         children: [
-          CheckerIcon(size: 36, dark: side == Side.black),
-          const SizedBox(width: 12),
+          CheckerIcon(size: compact ? 26 : 36, dark: side == Side.black),
+          SizedBox(width: compact ? 9 : 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _nameFor(side),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
+            child: compact
+                ? Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${side.label} · '
+                        '${controller.state.board.count(side)} шашек',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: muted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Text(
-                  '${side.label} · ${controller.state.board.count(side)} шашек',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: muted,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
           ),
           if (active)
-            const Eyebrow(
+            Eyebrow(
               'ХОД',
               color: deepPurple,
-              background: Color(0xFFDCCDF8),
+              background: const Color(0xFFDCCDF8),
+              fontSize: compact ? 9 : 10,
             ),
         ],
       ),
@@ -623,7 +695,7 @@ class _GamePageState extends State<GamePage> {
 
   /// The bubble under the board. The best move is described here only after
   /// «Подсказка» is pressed; the capture duty is told when a tap is refused.
-  Widget _message() {
+  Widget _message({bool compact = false}) {
     var text = controller.notice;
     var hint = false;
     if (text == null) {
@@ -632,10 +704,14 @@ class _GamePageState extends State<GamePage> {
     }
     if (text == null && controller.waitingForUndo) text = 'Ждём ответа друга…';
     if (text == null && controller.computerThinking) text = 'Компьютер думает…';
+    if (text == null && controller.isDraw) text = 'Ничья — отличная партия!';
     if (text == null &&
         widget.settings.hints &&
         widget.setup.variant == GameVariant.giveaway) {
-      text = 'В поддавках нужно стараться отдать свои шашки!';
+      text = 'В поддавках выгодно отдавать шашки!';
+    }
+    if (text == null && widget.setup.mode == GameMode.network) {
+      text = controller.isMyTurn ? 'Твой ход' : 'Ходит друг…';
     }
     text ??=
         'Ходят ${controller.state.turn == Side.white ? 'белые' : 'чёрные'}';
@@ -644,41 +720,49 @@ class _GamePageState extends State<GamePage> {
     return Container(
       key: const Key('message-bubble'),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+      padding: EdgeInsets.fromLTRB(12, compact ? 7 : 10, 6, compact ? 7 : 10),
       decoration: BoxDecoration(
         color: hint ? const Color(0xFFFFE8A8) : const Color(0xFFFFF0CA),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
           Icon(
             hint ? Icons.lightbulb_rounded : Icons.auto_awesome_rounded,
             color: const Color(0xFFBA8940),
-            size: 19,
+            size: compact ? 17 : 19,
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF795D38),
+              maxLines: compact ? 2 : 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 12,
+                height: 1.25,
+                color: const Color(0xFF795D38),
                 fontWeight: FontWeight.w900,
               ),
             ),
           ),
           if (canDismiss)
-            IconButton(
-              key: const Key('message-dismiss'),
-              onPressed: controller.hintText != null
-                  ? controller.clearHint
-                  : controller.clearNotice,
-              visualDensity: VisualDensity.compact,
-              tooltip: 'Скрыть',
-              icon: const Icon(
-                Icons.close_rounded,
-                size: 18,
-                color: Color(0xFF9A8060),
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: IconButton(
+                key: const Key('message-dismiss'),
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                onPressed: controller.hintText != null
+                    ? controller.clearHint
+                    : controller.clearNotice,
+                tooltip: 'Скрыть',
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: Color(0xFF9A8060),
+                ),
               ),
             ),
         ],
@@ -686,7 +770,18 @@ class _GamePageState extends State<GamePage> {
     );
   }
 
-  Widget _actions() => Row(
+  /// The hint button appears only when it can be used right now: a greyed out
+  /// button is never shown. While the game is over, an animation runs, an undo
+  /// is awaited or the other player is to move there is nothing to hint, so the
+  /// row simply shrinks to the undo button. When the button is on the screen it
+  /// is always pressable — repeated presses during a running search are ignored
+  /// by [GameController.showHint].
+  bool get _showHintButton =>
+      widget.settings.hints &&
+      widget.settings.hintButton &&
+      (controller.hintThinking || controller.canInteract);
+
+  Widget _actions({bool compact = false}) => Row(
     children: [
       Expanded(
         child: _ActionButton(
@@ -695,18 +790,20 @@ class _GamePageState extends State<GamePage> {
           label: 'Отменить ход',
           enabled: controller.canUndo,
           onTap: controller.undo,
+          height: compact ? 46 : 54,
         ),
       ),
-      if (widget.settings.hints && widget.settings.hintButton) ...[
+      if (_showHintButton) ...[
         const SizedBox(width: 10),
         Expanded(
           child: _ActionButton(
             key: const Key('hint-button'),
             icon: Icons.lightbulb_outline_rounded,
             label: controller.hintThinking ? 'Думаю…' : 'Подсказка',
-            enabled: controller.canInteract && !controller.hintThinking,
+            enabled: true,
             onTap: controller.showHint,
             highlighted: true,
+            height: compact ? 46 : 54,
           ),
         ),
       ],
@@ -722,6 +819,7 @@ class _GamePageState extends State<GamePage> {
             enabled: controller.canInteract,
             onTap: controller.finishCapture,
             highlighted: true,
+            height: compact ? 46 : 54,
           ),
         ),
       ],
@@ -737,14 +835,16 @@ class _ActionButton extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     this.highlighted = false,
+    this.height = 54,
   });
   final IconData icon;
   final String label;
   final bool enabled, highlighted;
+  final double height;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 54,
+    height: height,
     child: FilledButton.icon(
       onPressed: enabled ? onTap : null,
       icon: Icon(icon, size: 21),
@@ -760,8 +860,11 @@ class _ActionButton extends StatelessWidget {
   );
 }
 
+/// The picture above the result text. A win shows a crowned piece with stars,
+/// a draw or a loss shows a calm piece without them.
 class _Celebration extends StatefulWidget {
-  const _Celebration();
+  const _Celebration({this.calm = false});
+  final bool calm;
   @override
   State<_Celebration> createState() => _CelebrationState();
 }
@@ -778,6 +881,21 @@ class _CelebrationState extends State<_Celebration>
     super.dispose();
   }
 
+  Widget _star({
+    required double? top,
+    required double? bottom,
+    required double? left,
+    required double? right,
+    required Color color,
+    required double size,
+  }) => Positioned(
+    top: top,
+    bottom: bottom,
+    left: left,
+    right: right,
+    child: Icon(Icons.star_rounded, color: color, size: size),
+  );
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: animation,
@@ -788,45 +906,45 @@ class _CelebrationState extends State<_Celebration>
         alignment: Alignment.center,
         children: [
           Transform.scale(
-            scale: .95 + animation.value * .1,
-            child: const CheckerIcon(size: 76, crown: true),
+            scale: .95 + animation.value * (widget.calm ? .04 : .1),
+            child: CheckerIcon(size: 76, crown: !widget.calm),
           ),
-          Positioned(
-            top: 5 + animation.value * 5,
-            left: 10,
-            child: const Icon(
-              Icons.star_rounded,
-              color: Color(0xFFF5C254),
-              size: 27,
+          if (!widget.calm) ...[
+            Positioned(
+              top: 5 + animation.value * 5,
+              left: 10,
+              child: const Icon(
+                Icons.star_rounded,
+                color: Color(0xFFF5C254),
+                size: 27,
+              ),
             ),
-          ),
-          Positioned(
-            top: 4,
-            right: 8,
-            child: Icon(
-              Icons.auto_awesome_rounded,
-              color: purple.withValues(alpha: .7),
-              size: 25,
+            Positioned(
+              top: 4,
+              right: 8,
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                color: purple.withValues(alpha: .7),
+                size: 25,
+              ),
             ),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 22,
-            child: const Icon(
-              Icons.star_rounded,
-              color: Color(0xFFFFB39D),
+            _star(
+              top: null,
+              bottom: 0,
+              left: 22,
+              right: null,
+              color: const Color(0xFFFFB39D),
               size: 20,
             ),
-          ),
-          Positioned(
-            bottom: 6,
-            right: 18,
-            child: const Icon(
-              Icons.star_rounded,
-              color: Color(0xFFB7DDAF),
+            _star(
+              top: null,
+              bottom: 6,
+              left: null,
+              right: 18,
+              color: const Color(0xFFB7DDAF),
               size: 19,
             ),
-          ),
+          ],
         ],
       ),
     ),

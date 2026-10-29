@@ -76,4 +76,41 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  test('с бюджетом времени углубляется дальше двух полуходов', () {
+    // The hint asks for a deep search but gives it a time budget, so the answer
+    // comes from the deepest completed pass instead of the shallowest one.
+    final state = GameState.initial(GameVariant.russian);
+    final ai = CheckersAI(random: Random(3), nodeBudget: 400000);
+    final move = ai.findBestMove(
+      state,
+      6,
+      budget: const Duration(milliseconds: 900),
+    );
+    expect(move, isNotNull);
+    expect(RussianRules().legalMoves(state), contains(move));
+    expect(ai.lastDepth, greaterThanOrEqualTo(3));
+    expect(ai.lastDepth, lessThanOrEqualTo(6));
+  });
+
+  test('без бюджета глубина поиска ровно та, что запрошена', () {
+    final state = GameState.initial(GameVariant.russian);
+    final ai = CheckersAI(random: Random(4));
+    expect(ai.findBestMove(state, 3), isNotNull);
+    expect(ai.lastDepth, 3);
+  });
+
+  test('бюджет действительно ограничивает время поиска', () {
+    // Depth 12 on a 10×10 board cannot be finished in a moment, so the search
+    // must stop by itself instead of running for minutes.
+    final state = GameState.initial(GameVariant.international);
+    final ai = CheckersAI(random: Random(5), nodeBudget: 4000000);
+    final started = DateTime.now();
+    ai.findBestMove(state, 12, budget: const Duration(milliseconds: 100));
+    expect(
+      DateTime.now().difference(started),
+      lessThan(const Duration(seconds: 3)),
+    );
+    expect(ai.lastDepth, lessThan(12));
+  });
 }

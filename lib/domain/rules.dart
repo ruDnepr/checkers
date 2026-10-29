@@ -201,11 +201,15 @@ class StandardRules implements GameRules {
       piece = piece.crown();
     }
     pieces[move.to] = piece;
+    // A capture or a move of a simple piece breaks the quiet series; a king
+    // that just walks keeps it growing.
+    final quiet = !move.isCapture && (state.board.at(move.from)?.king ?? false);
     return GameState(
       variant: variant,
       board: Board(state.board.size, pieces),
       turn: state.turn.opponent,
       ply: state.ply + 1,
+      quietPlies: quiet ? state.quietPlies + 1 : 0,
     );
   }
 
