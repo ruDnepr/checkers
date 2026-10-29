@@ -182,8 +182,10 @@ jobs:
           github.event.action == 'labeled' &&
           contains(github.event.pull_request.labels.*.name, 'device'))
         continue-on-error: true
-        # Без этого предела зависший эмулятор держал бы всё задание целиком.
-        timeout-minutes: 45
+        # Предел шага больше суммы пределов внутри скрипта (загрузка эмулятора
+        # 10 мин + прогрев 7 мин + 4 теста по 3 мин), чтобы зависший эмулятор
+        # давал обычный сбой с логами, а не молчаливое убийство шага.
+        timeout-minutes: 40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30

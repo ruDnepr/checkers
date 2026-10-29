@@ -15,7 +15,7 @@ else
   # take minutes; warm it once here so the per-test runs stay fast and a slow
   # download is never mistaken for a hung test.
   echo '=== прогрев сборки' >> /tmp/integration.txt
-  if ! timeout --signal=KILL 600 flutter build apk --debug \
+  if ! timeout --signal=KILL 420 flutter build apk --debug \
     >> /tmp/integration.txt 2>&1; then
     echo 'Сборка debug APK не удалась' >> /tmp/integration.txt
     status=1
@@ -24,7 +24,7 @@ else
     echo "=== $file" >> /tmp/integration.txt
     # A wedged emulator can leave `flutter test` waiting forever, so every run
     # is bounded and a failure still leaves the log for the annotations.
-    timeout --signal=KILL 300 flutter test "$file" --reporter expanded \
+    timeout --signal=KILL 180 flutter test "$file" --reporter expanded \
       >> /tmp/integration.txt 2>&1 || status=1
   done
 fi
