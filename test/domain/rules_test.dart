@@ -378,8 +378,8 @@ void main() {
     );
     expect(otherTurn.positionKey, isNot(first.positionKey));
     final otherVariant = GameState(
-      variant: GameVariant.classic,
-      board: Board(GameVariant.classic.boardSize, board.pieces),
+      variant: GameVariant.american,
+      board: Board(GameVariant.american.boardSize, board.pieces),
       turn: Side.white,
     );
     expect(otherVariant.positionKey, isNot(first.positionKey));
