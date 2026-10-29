@@ -7,6 +7,8 @@ import 'package:checkers_for_diana/network/network_game_service.dart';
 import 'package:checkers_for_diana/network/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../support/harness.dart';
+
 /// A pair of connected services that hand every message straight to the other
 /// side, so the real controller code runs without sockets or mDNS.
 class LoopbackService extends NetworkGameService {
@@ -23,21 +25,6 @@ class LoopbackService extends NetworkGameService {
 
   @override
   Future<void> close() => _incoming.close();
-}
-
-Future<void> waitFor(GameController game, bool Function() condition) async {
-  if (condition()) return;
-  final completer = Completer<void>();
-  void listener() {
-    if (condition() && !completer.isCompleted) completer.complete();
-  }
-
-  game.addListener(listener);
-  try {
-    await completer.future.timeout(const Duration(seconds: 10));
-  } finally {
-    game.removeListener(listener);
-  }
 }
 
 /// Two kings that do not see each other on any diagonal: no capture is
@@ -115,7 +102,7 @@ void main() {
       final to = circle[game.state.ply % circle.length][1];
       game.tap(from);
       game.tap(to);
-      await waitFor(other, () => other.state.ply == game.state.ply);
+      await waitUntil(other, () => other.state.ply == game.state.ply);
       expect(other.state.fingerprint, game.state.fingerprint);
       expect(other.isDraw, game.isDraw);
     }

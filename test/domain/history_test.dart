@@ -1,24 +1,9 @@
-import 'dart:async';
-
 import 'package:checkers_for_diana/application/game_controller.dart';
 import 'package:checkers_for_diana/application/settings.dart';
 import 'package:checkers_for_diana/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<void> waitUntil(GameController game, bool Function() condition) async {
-  if (condition()) return;
-  final completer = Completer<void>();
-  void listener() {
-    if (condition() && !completer.isCompleted) completer.complete();
-  }
-
-  game.addListener(listener);
-  try {
-    await completer.future.timeout(const Duration(seconds: 15));
-  } finally {
-    game.removeListener(listener);
-  }
-}
+import '../support/async_wait.dart';
 
 void main() {
   test(

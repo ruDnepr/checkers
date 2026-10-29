@@ -7,7 +7,6 @@ const deepPurple = Color(0xFF6047AF);
 const cream = Color(0xFFFFF8ED);
 const yellow = Color(0xFFFFD66D);
 const peach = Color(0xFFFFD9C7);
-const mint = Color(0xFFDDF2DF);
 
 ThemeData dianaTheme() {
   final base = ThemeData(
