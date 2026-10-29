@@ -174,7 +174,15 @@ class CheckersAI {
       return _endScore(state, root, depth);
     }
     if (depth == 0) {
-      return _quiesce(state, rules, alpha, beta, root, materialOnly);
+      return _quiesce(
+        state,
+        rules,
+        alpha,
+        beta,
+        root,
+        materialOnly,
+        quiescencePlies,
+      );
     }
     final maximizing = state.turn == root;
     var best = maximizing ? double.negativeInfinity : double.infinity;
