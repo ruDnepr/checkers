@@ -60,7 +60,8 @@ class GameController extends ChangeNotifier {
     this.setup,
     this.settings, {
     this.animationPerLanding = const Duration(milliseconds: 350),
-  }) : state = GameState.initial(setup.variant),
+    GameState? initialState,
+  }) : state = initialState ?? GameState.initial(setup.variant),
        rules = GameRules.forVariant(setup.variant) as StandardRules,
        sounds = GameSounds(settings) {
     if (setup.mode == GameMode.network && setup.network == null) {
@@ -85,6 +86,10 @@ class GameController extends ChangeNotifier {
   final List<Square> _prefix = [];
   List<Square> get selectedPath => List.unmodifiable(_prefix);
   Move? suggestedMove;
+
+  /// Explanation of the highlighted hint. It is filled by [showHint] only, so
+  /// nothing hints at the best move before the button is pressed.
+  String? hintText;
   MoveAnimation? animation;
   bool computerThinking = false;
   bool hintThinking = false;
@@ -168,14 +173,91 @@ class GameController extends ChangeNotifier {
 
   void _refresh() => legalMoves = rules.legalMoves(state);
   void _settingsChanged() {
-    if (!settings.hints) suggestedMove = null;
+    if (!settings.hints) {
+      suggestedMove = null;
+      hintText = null;
+      // Instructions only make sense while the hints setting is on.
+      if (notice != null && !waitingForUndo) notice = null;
+    }
     _notify();
+  }
+
+  /// Called when «Подсказка» is pressed: highlights the best move and explains
+  /// why it is good. Nothing about the best move is shown before this.
+  String _describeHint(Move move) {
+    final buffer = StringBuffer('Подсказка: подсвечен лучший ход');
+    if (move.isCapture) {
+      buffer.write(', он бьёт ${_captureCount(move.captures.length)}');
+    }
+    if (hasCapture) {
+      buffer.write(
+        setup.variant == GameVariant.international
+            ? '. Бить нужно как можно больше шашек: ${maximumCapture}'
+            : '. Сейчас бой обязателен',
+      );
+    }
+    if (setup.variant == GameVariant.giveaway) {
+      buffer.write('. В поддавках выгодно отдавать свои шашки');
+    }
+    return '${buffer.toString()}.';
+  }
+
+  /// Dismisses the hint bubble. The highlight disappears with it.
+  void clearHint() {
+    if (suggestedMove == null && hintText == null) return;
+    suggestedMove = null;
+    hintText = null;
+    _notify();
+  }
+
+  /// Dismisses an explanation message shown after a tap.
+  void clearNotice() {
+    if (notice == null) return;
+    notice = null;
+    _notify();
+  }
+
+  static String _captureCount(int count) => switch (count) {
+    1 => '1 шашку',
+    2 => '2 шашки',
+    3 => '3 шашки',
+    4 => '4 шашки',
+    _ => '$count шашек',
+  };
+
+  String _captureDutyText() => setup.variant == GameVariant.international
+      ? 'Сейчас нужно бить как можно больше шашек: $maximumCapture.'
+      : 'Сейчас бой обязателен: спокойно походить нельзя, нужно бить шашку.';
+
+  /// Explains why a tap changed nothing, so a child is not left guessing.
+  /// Detailed wording belongs to the hints setting; without hints the message
+  /// only states that the move is not possible.
+  String _explainTap(Square square, {required bool hadSelection}) {
+    if (!settings.hints) return 'Так ходить нельзя.';
+    final piece = state.board.at(square);
+    if (piece == null) {
+      if (hasCapture) return _captureDutyText();
+      if (hadSelection) {
+        return 'Так ходить нельзя: подсвечены только разрешённые клетки.';
+      }
+      return 'Сначала выбери свою шашку, потом подсвеченную клетку.';
+    }
+    if (piece.side != state.turn) {
+      return 'Это шашка соперника: ходить можно только своей.';
+    }
+    if (hasCapture) {
+      return setup.variant == GameVariant.international
+          ? '${_captureDutyText()} Эта шашка не бьёт — выбери ту, которая бьёт.'
+          : 'Сейчас бой обязателен: эта шашка не бьёт, выбери ту, которая бьёт.';
+    }
+    return 'Эта шашка сейчас не может ходить — выбери другую.';
   }
 
   void tap(Square square) {
     if (!canInteract) return;
     notice = null;
     suggestedMove = null;
+    hintText = null;
     final candidates = selectedCandidates;
     final next = candidates
         .where(
@@ -198,14 +280,20 @@ class GameController extends ChangeNotifier {
       return;
     }
     // Once a chain has begun it cannot be abandoned or switched to another piece.
-    if (_prefix.isNotEmpty) return;
+    if (_prefix.isNotEmpty) {
+      notice = 'Серия взятий уже начата — закончи её этой же шашкой.';
+      _notify();
+      return;
+    }
     if (legalMoves.any((m) => m.from == square)) {
       selected = square;
       _notify();
-    } else if (selected != null) {
-      selected = null;
-      _notify();
+      return;
     }
+    final hadSelection = selected != null;
+    selected = null;
+    notice = _explainTap(square, hadSelection: hadSelection);
+    _notify();
   }
 
   Future<void> showHint() async {
@@ -213,6 +301,7 @@ class GameController extends ChangeNotifier {
     final snapshot = state;
     final generation = _generation;
     hintThinking = true;
+    notice = null;
     _notify();
     try {
       // The hint always searches two plies with the full heuristic, which is
@@ -227,6 +316,7 @@ class GameController extends ChangeNotifier {
           settings.hints) {
         _clearSelection();
         suggestedMove = move;
+        hintText = _describeHint(move);
       }
     } finally {
       if (!_disposed) {
@@ -245,6 +335,8 @@ class GameController extends ChangeNotifier {
     _refresh();
     _clearSelection();
     suggestedMove = null;
+    hintText = null;
+    notice = null;
     computerThinking = false;
     final duration = animationPerLanding * move.landings.length;
     animation = MoveAnimation(before, move, duration);
@@ -361,6 +453,7 @@ class GameController extends ChangeNotifier {
     incomingUndoPly = null;
     _deferredUndoPly = null;
     suggestedMove = null;
+    hintText = null;
     _clearSelection();
     _refresh();
     _notify();

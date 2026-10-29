@@ -17,12 +17,16 @@ class GamePage extends StatefulWidget {
     required this.settings,
     required this.setup,
     this.animationPerLanding = const Duration(milliseconds: 350),
+    this.initialState,
   });
   final SettingsController settings;
   final GameSetup setup;
 
   /// Shorter values keep device tests fast; the game itself uses 350 ms.
   final Duration animationPerLanding;
+
+  /// Optional starting position; the game always starts from the initial one.
+  final GameState? initialState;
   @override
   State<GamePage> createState() => _GamePageState();
 }
@@ -32,6 +36,7 @@ class _GamePageState extends State<GamePage> {
     widget.setup,
     widget.settings,
     animationPerLanding: widget.animationPerLanding,
+    initialState: widget.initialState,
   );
   bool resultShown = false;
   bool resultDialogOpen = false;
@@ -588,15 +593,17 @@ class _GamePageState extends State<GamePage> {
     return panel;
   }
 
+  /// The bubble under the board. The best move is described here only after
+  /// «Подсказка» is pressed; the capture duty is told when a tap is refused.
   Widget _message() {
     var text = controller.notice;
+    var hint = false;
+    if (text == null) {
+      text = controller.hintText;
+      hint = text != null;
+    }
     if (text == null && controller.waitingForUndo) text = 'Ждём ответа друга…';
     if (text == null && controller.computerThinking) text = 'Компьютер думает…';
-    if (text == null && widget.settings.hints && controller.hasCapture) {
-      text = widget.setup.variant == GameVariant.international
-          ? 'Нужно побить как можно больше шашек: ${controller.maximumCapture}.'
-          : 'Сейчас нужно бить шашку соперника!';
-    }
     if (text == null &&
         widget.settings.hints &&
         widget.setup.variant == GameVariant.giveaway) {
@@ -604,18 +611,21 @@ class _GamePageState extends State<GamePage> {
     }
     text ??=
         'Ходят ${controller.state.turn == Side.white ? 'белые' : 'чёрные'}';
+    final canDismiss =
+        controller.notice != null || controller.hintText != null;
     return Container(
+      key: const Key('message-bubble'),
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF0CA),
+        color: hint ? const Color(0xFFFFE8A8) : const Color(0xFFFFF0CA),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.auto_awesome_rounded,
-            color: Color(0xFFBA8940),
+          Icon(
+            hint ? Icons.lightbulb_rounded : Icons.auto_awesome_rounded,
+            color: const Color(0xFFBA8940),
             size: 19,
           ),
           const SizedBox(width: 9),
@@ -629,6 +639,20 @@ class _GamePageState extends State<GamePage> {
               ),
             ),
           ),
+          if (canDismiss)
+            IconButton(
+              key: const Key('message-dismiss'),
+              onPressed: controller.hintText != null
+                  ? controller.clearHint
+                  : controller.clearNotice,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Скрыть',
+              icon: const Icon(
+                Icons.close_rounded,
+                size: 18,
+                color: Color(0xFF9A8060),
+              ),
+            ),
         ],
       ),
     );

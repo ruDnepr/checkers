@@ -282,16 +282,28 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
           const [0, .55, 1],
         ),
     );
+    // Kings get a bright ridge. On a light (white) piece the golden ring alone
+    // did not stand out, so it is paired with a dark inner outline.
     canvas.drawCircle(
       center,
       radius * .74,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(1.0, cell * .035)
+        ..strokeWidth = math.max(1.0, cell * (piece.king ? .075 : .035))
         ..color = piece.king
-            ? const Color(0xFFFFDB6C)
+            ? (dark ? const Color(0xFFFFDB6C) : const Color(0xFFE09A18))
             : (dark ? const Color(0xFF73717A) : const Color(0xFFD5C3A0)),
     );
+    if (piece.king && !dark) {
+      canvas.drawCircle(
+        center,
+        radius * .74,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, cell * .018)
+          ..color = const Color(0xFF5A3A05),
+      );
+    }
     canvas.drawArc(
       rect.deflate(radius * .18),
       math.pi * 1.12,
@@ -316,7 +328,19 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
         }
       }
       star.close();
-      canvas.drawPath(star, Paint()..color = const Color(0xFFF4C755));
+      // A dark outline keeps the golden star readable on the light piece.
+      canvas.drawPath(
+        star,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, cell * .028)
+          ..strokeJoin = StrokeJoin.round
+          ..color = const Color(0xFF6B4408),
+      );
+      canvas.drawPath(
+        star,
+        Paint()..color = dark ? const Color(0xFFF4C755) : const Color(0xFFEB9D0B),
+      );
     }
     canvas.restore();
   }

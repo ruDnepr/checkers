@@ -93,33 +93,9 @@ class HomePage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
                 child: Column(
                   children: [
-                    Row(
-                      children: [
-                        const Eyebrow('ИГРАЕМ ВМЕСТЕ ✦'),
-                        const Spacer(),
-                        InkWell(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SettingsPage(settings: settings),
-                            ),
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.settings_rounded,
-                              color: purple,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    // Настройки открываются пунктом меню ниже: отдельная
+                    // шестерёнка в шапке дублировала его и убрана.
+                    const Row(children: [Eyebrow('ИГРАЕМ ВМЕСТЕ ✦')]),
                     const SizedBox(height: 24),
                     const _Logo(size: 132),
                     const SizedBox(height: 22),

@@ -427,16 +427,20 @@ class CheckerIcon extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(
             color: crown
-                ? const Color(0xFFE7B84C)
+                ? (dark
+                      ? const Color(0xFFE7B84C)
+                      : const Color(0xFFB56F00))
                 : (dark ? Colors.white24 : const Color(0xFFD9C9AC)),
-            width: 2,
+            width: crown ? 3 : 2,
           ),
         ),
         child: crown
             ? Icon(
                 Icons.star_rounded,
                 size: size * .4,
-                color: const Color(0xFFE7B84C),
+                color: dark
+                    ? const Color(0xFFE7B84C)
+                    : const Color(0xFFC97C00),
               )
             : null,
       ),
