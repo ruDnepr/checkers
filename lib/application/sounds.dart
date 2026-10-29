@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flame_audio/flame_audio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'settings.dart';
