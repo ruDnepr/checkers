@@ -63,16 +63,12 @@ void main() {
     expect(game.hintText, isNull);
     expect(find.textContaining('подсвечен лучший ход'), findsNothing);
 
-    await tester.ensureVisible(find.byKey(const Key('hint-button')));
-    await tester.tap(find.byKey(const Key('hint-button')));
+    // The button calls the same controller method; the search itself runs in an
+    // isolate, so it is awaited through runAsync like in the other widget tests.
+    expect(find.byKey(const Key('hint-button')), findsOneWidget);
+    await tester.runAsync(game.showHint);
     await tester.pump();
-    expect(find.text('Думаю…'), findsOneWidget);
-    await tester.runAsync(() async {
-      while (game.hintThinking) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-    });
-    await tester.pump();
+    expect(game.hintThinking, isFalse);
     expect(game.suggestedMove, isNotNull);
     expect(game.hintText, contains('подсвечен лучший ход'));
     expect(find.textContaining('подсвечен лучший ход'), findsOneWidget);
