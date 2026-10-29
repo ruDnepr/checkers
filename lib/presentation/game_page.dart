@@ -510,15 +510,43 @@ class _GamePageState extends State<GamePage> {
         ),
         ListenableBuilder(
           listenable: widget.settings,
-          builder: (context, _) => IconButton(
-            tooltip: widget.settings.sound ? 'Выключить звук' : 'Включить звук',
-            onPressed: () => widget.settings.setSound(!widget.settings.sound),
-            icon: Icon(
-              widget.settings.sound
-                  ? Icons.volume_up_rounded
-                  : Icons.volume_off_rounded,
-              color: purple,
-            ),
+          builder: (context, _) => Row(
+            children: [
+              // Shows or hides only the «Подсказка» button under the board.
+              // With the hints setting off there is nothing to show, so the
+              // switch itself is hidden as well.
+              if (widget.settings.hints)
+                IconButton(
+                  key: const Key('hint-toggle'),
+                  tooltip: widget.settings.hintButton
+                      ? 'Скрыть кнопку «Подсказка»'
+                      : 'Показать кнопку «Подсказка»',
+                  onPressed: () => widget.settings.setHintButton(
+                    !widget.settings.hintButton,
+                  ),
+                  icon: Icon(
+                    widget.settings.hintButton
+                        ? Icons.lightbulb_rounded
+                        : Icons.lightbulb_outline_rounded,
+                    color: widget.settings.hintButton
+                        ? purple
+                        : const Color(0xFFB4ACAF),
+                  ),
+                ),
+              IconButton(
+                tooltip: widget.settings.sound
+                    ? 'Выключить звук'
+                    : 'Включить звук',
+                onPressed: () =>
+                    widget.settings.setSound(!widget.settings.sound),
+                icon: Icon(
+                  widget.settings.sound
+                      ? Icons.volume_up_rounded
+                      : Icons.volume_off_rounded,
+                  color: purple,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -669,7 +697,7 @@ class _GamePageState extends State<GamePage> {
           onTap: controller.undo,
         ),
       ),
-      if (widget.settings.hints) ...[
+      if (widget.settings.hints && widget.settings.hintButton) ...[
         const SizedBox(width: 10),
         Expanded(
           child: _ActionButton(
@@ -678,6 +706,21 @@ class _GamePageState extends State<GamePage> {
             label: controller.hintThinking ? 'Думаю…' : 'Подсказка',
             enabled: controller.canInteract && !controller.hintThinking,
             onTap: controller.showHint,
+            highlighted: true,
+          ),
+        ),
+      ],
+      // Only Russian/giveaway let a man stop a series early, so this button
+      // appears exactly when the played series may be finished here.
+      if (controller.canFinishCapture) ...[
+        const SizedBox(width: 10),
+        Expanded(
+          child: _ActionButton(
+            key: const Key('finish-capture-button'),
+            icon: Icons.done_all_rounded,
+            label: 'Закончить бой',
+            enabled: controller.canInteract,
+            onTap: controller.finishCapture,
             highlighted: true,
           ),
         ),

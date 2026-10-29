@@ -4,6 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 class SettingsController extends ChangeNotifier {
   SharedPreferences? _preferences;
   bool hints = true;
+
+  /// Shows the «Подсказка» button under the board. It is a separate switch, so
+  /// the button can be hidden while the move highlighting stays on.
+  bool hintButton = true;
   bool sound = true;
   String nickname = 'Диана';
   int gamesPlayed = 0;
@@ -12,6 +16,7 @@ class SettingsController extends ChangeNotifier {
   Future<void> load() async {
     _preferences = await SharedPreferences.getInstance();
     hints = _preferences!.getBool('hints') ?? true;
+    hintButton = _preferences!.getBool('hintButton') ?? true;
     sound = _preferences!.getBool('sound') ?? true;
     nickname = _preferences!.getString('nickname') ?? 'Диана';
     gamesPlayed = _preferences!.getInt('gamesPlayed') ?? 0;
@@ -23,6 +28,12 @@ class SettingsController extends ChangeNotifier {
     hints = value;
     notifyListeners();
     await _preferences?.setBool('hints', value);
+  }
+
+  Future<void> setHintButton(bool value) async {
+    hintButton = value;
+    notifyListeners();
+    await _preferences?.setBool('hintButton', value);
   }
 
   Future<void> setSound(bool value) async {

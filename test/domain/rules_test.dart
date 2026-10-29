@@ -35,7 +35,7 @@ void main() {
     }
   });
 
-  test('бой обязателен и цепочка является одним ходом', () {
+  test('бой обязателен, простой в русских можно остановить в середине', () {
     final state = position(GameVariant.russian, {
       const Square(5, 0): white,
       const Square(4, 1): black,
@@ -44,13 +44,24 @@ void main() {
     });
     const rules = RussianRules();
     final moves = rules.legalMoves(state);
-    expect(moves, hasLength(1));
-    expect(moves.single.landings, [const Square(3, 2), const Square(1, 4)]);
-    expect(moves.single.captures, [const Square(4, 1), const Square(2, 3)]);
-    final next = rules.apply(state, moves.single);
-    expect(next.board.count(Side.black), 0);
-    expect(next.turn, Side.black);
-    expect(rules.winner(next), Side.white);
+    // No quiet move, and the man may stop after the first capture or play both.
+    expect(moves.every((m) => m.isCapture), isTrue);
+    expect(moves, hasLength(2));
+    final short = moves.firstWhere((m) => m.landings.length == 1);
+    final full = moves.firstWhere((m) => m.landings.length == 2);
+    expect(short.landings, [const Square(3, 2)]);
+    expect(short.captures, [const Square(4, 1)]);
+    expect(full.landings, [const Square(3, 2), const Square(1, 4)]);
+    expect(full.captures, [const Square(4, 1), const Square(2, 3)]);
+
+    final afterShort = rules.apply(state, short);
+    expect(afterShort.board.count(Side.black), 1);
+    expect(afterShort.turn, Side.black);
+
+    final afterFull = rules.apply(state, full);
+    expect(afterFull.board.count(Side.black), 0);
+    expect(rules.winner(afterFull), Side.white);
+
     expect(
       () => rules.apply(
         state,
@@ -58,6 +69,68 @@ void main() {
       ),
       throwsStateError,
     );
+  });
+
+  test('в поддавках простой тоже выбирает длину серии', () {
+    final state = position(GameVariant.giveaway, {
+      const Square(5, 0): white,
+      const Square(4, 1): black,
+      const Square(2, 3): black,
+    });
+    final moves = GiveawayRules().legalMoves(state);
+    expect(moves.map((m) => m.captures.length).toSet(), {1, 2});
+  });
+
+  test('дамка обязана бить дальше, но может повернуть внутри серии', () {
+    const king = Piece(Side.white, king: true);
+    // The king takes (6, 1), may stop on (4, 3) where nothing can be taken,
+    // but must not stop on (5, 2), from where (4, 1) is still available.
+    final state = position(GameVariant.russian, {
+      const Square(7, 0): king,
+      const Square(6, 1): black,
+      const Square(4, 1): black,
+    });
+    final moves = RussianRules().legalMoves(state);
+    expect(
+      moves.where((m) => m.captures.length == 1 && m.to == const Square(5, 2)),
+      isEmpty,
+      reason: 'с (5, 2) дамка обязана продолжить бой',
+    );
+    final turn = moves.firstWhere((m) => m.captures.length == 2);
+    expect(turn.captures, [const Square(6, 1), const Square(4, 1)]);
+    expect(turn.landings, [const Square(5, 2), const Square(3, 0)]);
+
+    final giveaway = GiveawayRules().legalMoves(
+      position(GameVariant.giveaway, state.board.pieces),
+    );
+    expect(
+      giveaway.where((m) => m.captures.length == 1 && m.to == const Square(5, 2)),
+      isEmpty,
+    );
+    expect(giveaway.any((m) => m.captures.length == 2), isTrue);
+  });
+
+  test('в чекерсе серия доигрывается до конца простой шашкой', () {
+    final state = position(GameVariant.american, {
+      const Square(5, 2): white,
+      const Square(4, 3): black,
+      const Square(2, 5): black,
+    });
+    final moves = AmericanRules().legalMoves(state);
+    expect(moves, hasLength(1));
+    expect(moves.single.captures, [const Square(4, 3), const Square(2, 5)]);
+    expect(moves.single.landings, [const Square(3, 4), const Square(1, 6)]);
+  });
+
+  test('в международных серию прервать нельзя, берётся только максимум', () {
+    final state = position(GameVariant.international, {
+      const Square(5, 0): white,
+      const Square(4, 1): black,
+      const Square(2, 3): black,
+    });
+    final moves = InternationalRules().legalMoves(state);
+    expect(moves, hasLength(1));
+    expect(moves.single.captures, hasLength(2));
   });
 
   test('русская простая бьёт назад, американская — нет', () {
