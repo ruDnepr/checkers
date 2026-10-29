@@ -81,28 +81,34 @@ jobs:
           from pathlib import Path
 
           lines = Path('/tmp/tests.txt').read_text().splitlines()
-          # A failing test is marked with [E]; its details run up to the next
-          # progress line. Without this the annotation kept only the tail of the
-          # run and the name of the broken test was lost.
+          # A failing test is marked with [E]. The exception itself is printed a
+          # few lines BEFORE that marker, so the context is taken from both
+          # sides; without it the annotation named the test but not the reason.
           progress = re.compile(r'^\d{2}:\d{2} ')
           blocks = []
           for index, line in enumerate(lines):
               if '[E]' not in line:
                   continue
-              block = [line]
+              start = index
+              while start > 0 and index - start < 45 and not progress.match(
+                  lines[start - 1]
+              ):
+                  start -= 1
+              block = lines[start:index + 1]
               for following in lines[index + 1:]:
                   if progress.match(following):
                       break
                   block.append(following)
-              blocks.append('\n'.join(block[:40]))
+              blocks.append('\n'.join(block))
           if not blocks:
               blocks = ['\n'.join(lines[-60:])]
           for number, block in enumerate(blocks[:6]):
-              print(
-                  f'::error title=failed-test-{number}::'
-                  + block[:3900].replace('%', '%25')
-                  .replace('\n', '%0A').replace('\r', '%0D')
-              )
+              for chunk in range(0, len(block), 3500):
+                  print(
+                      f'::error title=failed-test-{number}-{chunk // 3500}::'
+                      + block[chunk:chunk + 3500].replace('%', '%25')
+                      .replace('\n', '%0A').replace('\r', '%0D')
+                  )
           PY
           fi
           exit ${status:-0}

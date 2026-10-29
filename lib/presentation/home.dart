@@ -498,18 +498,14 @@ class _NameFieldState extends State<_NameField> {
   }
 
   @override
-  void didUpdateWidget(_NameField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Another screen may have changed the name; never fight the typing child.
-    if (!_focus.hasFocus &&
-        widget.settings.nickname != oldWidget.settings.nickname &&
-        widget.settings.nickname != _text.text) {
-      _text.text = widget.settings.nickname;
-    }
-  }
-
-  @override
   void dispose() {
+    // Leaving the page while the field is focused must not lose the name. The
+    // write is deferred by a microtask, because a notification during the build
+    // that removes this widget would rebuild a half-torn tree.
+    final typed = _text.text;
+    if (typed != widget.settings.nickname) {
+      scheduleMicrotask(() => widget.settings.setNickname(typed));
+    }
     _focus.removeListener(_onFocusChanged);
     _focus.dispose();
     _text.dispose();
