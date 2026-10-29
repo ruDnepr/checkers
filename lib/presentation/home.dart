@@ -399,45 +399,30 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: settings.nickname,
-                  maxLength: 20,
-                  textInputAction: TextInputAction.done,
-                  onChanged: settings.setNickname,
-                  decoration: InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: cream,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
+                _NameField(settings: settings),
               ],
             ),
           ),
           const SizedBox(height: 20),
           OutlinedButton.icon(
             onPressed: () async {
-              final reset = await showDialog<bool>(
+              final reset = await showDianaDialog<bool>(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Сбросить прогресс?'),
-                  content: const Text(
-                    'Счётчик партий и побед станет равен нулю. Настройки останутся.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Не сейчас'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Сбросить'),
-                    ),
-                  ],
+                title: 'Сбросить прогресс?',
+                content: const Text(
+                  'Счётчик партий и побед станет равен нулю. '
+                  'Настройки останутся.',
+                  textAlign: TextAlign.center,
+                  style: dialogTextStyle,
                 ),
+                actions: const [
+                  DianaDialogButton<bool>(
+                    label: 'Не сейчас',
+                    value: false,
+                    primary: true,
+                  ),
+                  DianaDialogButton<bool>(label: 'Сбросить', value: true),
+                ],
               );
               if (reset == true) await settings.resetProgress();
             },
@@ -458,6 +443,99 @@ class SettingsPage extends StatelessWidget {
   );
 }
 
+/// The player name.
+///
+/// The field keeps its own text while it is focused. Earlier the whole settings
+/// page was rebuilt on every keystroke and the name was written back into the
+/// field, so Android lost the text input connection and the keyboard closed —
+/// the name could not be changed at all. Now the text is committed when the
+/// child presses «Готово» or taps anywhere else.
+class _NameField extends StatefulWidget {
+  const _NameField({required this.settings});
+  final SettingsController settings;
+  @override
+  State<_NameField> createState() => _NameFieldState();
+}
+
+class _NameFieldState extends State<_NameField> {
+  late final TextEditingController _text = TextEditingController(
+    text: widget.settings.nickname,
+  );
+  final FocusNode _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChanged);
+  }
+
+  /// Keeps the field in sight when the keyboard pushes the page up.
+  void _onFocusChanged() {
+    if (!_focus.hasFocus) {
+      _commit();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_focus.hasFocus) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: .35,
+        duration: const Duration(milliseconds: 250),
+      );
+    });
+  }
+
+  void _commit() {
+    unawaited(widget.settings.setNickname(_text.text));
+    // Show exactly what was stored: trimmed, and cut to twenty characters.
+    final stored = widget.settings.nickname;
+    if (_text.text != stored) {
+      _text.value = TextEditingValue(
+        text: stored,
+        selection: TextSelection.collapsed(offset: stored.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    // Leaving the page while the field is focused must not lose the name. The
+    // write is deferred by a microtask, because a notification during the build
+    // that removes this widget would rebuild a half-torn tree.
+    final typed = _text.text;
+    if (typed != widget.settings.nickname) {
+      scheduleMicrotask(() => widget.settings.setNickname(typed));
+    }
+    _focus.removeListener(_onFocusChanged);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    key: const Key('nickname-field'),
+    controller: _text,
+    focusNode: _focus,
+    maxLength: 20,
+    textCapitalization: TextCapitalization.words,
+    textInputAction: TextInputAction.done,
+    onSubmitted: (_) => _focus.unfocus(),
+    onTapOutside: (_) => _focus.unfocus(),
+    decoration: InputDecoration(
+      hintText: 'Например, Диана',
+      counterText: '',
+      filled: true,
+      fillColor: cream,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
+}
+
 class _SettingsSwitch extends StatelessWidget {
   const _SettingsSwitch({
     required this.icon,
@@ -470,37 +548,42 @@ class _SettingsSwitch extends StatelessWidget {
   final String title, subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  // A Material, not a decorated Container: a ListTile paints its background and
+  // ink splashes on the nearest Material, so a coloured box in between hides
+  // them — Flutter asserts about exactly that in debug builds.
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(22),
-    ),
-    child: SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: purple,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      secondary: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1EAFB),
-          borderRadius: BorderRadius.circular(15),
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: purple,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        secondary: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1EAFB),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Icon(icon, color: purple),
         ),
-        child: Icon(icon, color: purple),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(
-          color: muted,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     ),

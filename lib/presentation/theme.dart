@@ -453,3 +453,100 @@ class CheckerIcon extends StatelessWidget {
     ),
   );
 }
+
+/// Body text of every dialog: quiet, readable and the same everywhere.
+const dialogTextStyle = TextStyle(
+  color: muted,
+  fontSize: 14,
+  fontWeight: FontWeight.w700,
+  height: 1.4,
+);
+
+/// One button of [showDianaDialog]: [value] is what the dialog returns.
+class DianaDialogButton<T> {
+  const DianaDialogButton({
+    required this.label,
+    required this.value,
+    this.primary = false,
+    this.key,
+  });
+  final String label;
+  final T value;
+
+  /// The safe choice is filled and comes first; the other one is outlined.
+  final bool primary;
+  final Key? key;
+}
+
+/// A dialog with big buttons, one under another.
+///
+/// Material lays dialog actions out in a row. Three Russian labels there —
+/// «Отменить ход», «В меню», «Играть снова» — shrink to a height a child
+/// cannot hit, which is exactly what happened on the phone. Here every button
+/// is full width and 56 px high, and the text never shrinks.
+Future<T?> showDianaDialog<T>({
+  required BuildContext context,
+  required String title,
+  required List<DianaDialogButton<T>> actions,
+  Widget? content,
+  bool barrierDismissible = true,
+}) => showDialog<T>(
+  context: context,
+  barrierDismissible: barrierDismissible,
+  builder: (dialogContext) => AlertDialog(
+    scrollable: true,
+    contentPadding: const EdgeInsets.fromLTRB(22, 6, 22, 20),
+    titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 6),
+    title: Text(
+      title,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.w900,
+        color: ink,
+        height: 1.15,
+      ),
+    ),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (content != null) ...[
+          content,
+          const SizedBox(height: 16),
+        ],
+        for (final (index, action) in actions.indexed) ...[
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: action.primary
+                ? FilledButton(
+                    key: action.key,
+                    onPressed: () => Navigator.pop(dialogContext, action.value),
+                    child: Text(action.label),
+                  )
+                : OutlinedButton(
+                    key: action.key,
+                    onPressed: () => Navigator.pop(dialogContext, action.value),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ink,
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: Color(0xFFE3D8F5)),
+                      minimumSize: const Size.fromHeight(56),
+                      textStyle: const TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: Text(action.label),
+                  ),
+          ),
+          if (index != actions.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    ),
+  ),
+);

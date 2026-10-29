@@ -60,11 +60,12 @@ class GameController extends ChangeNotifier {
   GameController(
     this.setup,
     this.settings, {
+    GameSounds? sounds,
     this.animationPerLanding = const Duration(milliseconds: 350),
     GameState? initialState,
   }) : state = initialState ?? GameState.initial(setup.variant),
        rules = GameRules.forVariant(setup.variant) as StandardRules,
-       sounds = GameSounds(settings) {
+       sounds = sounds ?? GameSounds(settings) {
     if (setup.mode == GameMode.network && setup.network == null) {
       throw ArgumentError('Для сетевой игры необходимо соединение');
     }
@@ -413,7 +414,11 @@ class GameController extends ChangeNotifier {
     final becameKing =
         !(before.board.at(move.from)?.king ?? false) &&
         (state.board.at(move.to)?.king ?? false);
-    sounds.play(becameKing ? 'crown' : (move.isCapture ? 'capture' : 'move'));
+    sounds.play(
+      becameKing
+          ? GameSound.crown
+          : (move.isCapture ? GameSound.capture : GameSound.move),
+    );
     _notify();
     if (duration > Duration.zero) await Future<void>.delayed(duration);
     if (_disposed || generation != _generation) return;
