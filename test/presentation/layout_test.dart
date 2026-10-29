@@ -4,10 +4,10 @@ import 'package:checkers_for_diana/domain/models.dart';
 import 'package:checkers_for_diana/network/network_game_service.dart';
 import 'package:checkers_for_diana/network/protocol.dart';
 import 'package:checkers_for_diana/presentation/board_game.dart';
-import 'package:checkers_for_diana/presentation/game_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/harness.dart';
 
 /// A board with one piece of each colour, so every layout test starts from a
 /// position where both players may move.
@@ -30,38 +30,6 @@ class SilentService extends NetworkGameService {
   void send(NetworkMessage message) {}
 }
 
-Future<void> pumpAt(
-  WidgetTester tester,
-  Size size, {
-  required SettingsController settings,
-  GameMode mode = GameMode.local,
-  Side turn = Side.white,
-  NetworkGameService? network,
-}) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(
-        home: GamePage(
-          settings: settings,
-          initialState: calmPosition(turn: turn),
-          animationPerLanding: const Duration(milliseconds: 20),
-          setup: GameSetup(
-            variant: GameVariant.russian,
-            mode: mode,
-            playerSide: Side.white,
-            network: network,
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump(const Duration(milliseconds: 200));
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -71,7 +39,12 @@ void main() {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
     const size = Size(360, 640);
-    await pumpAt(tester, size, settings: settings);
+    await pumpGame(
+      tester,
+      settings: settings,
+      state: calmPosition(),
+      size: size,
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.byType(SingleChildScrollView), findsNothing);
@@ -104,7 +77,12 @@ void main() {
   testWidgets('на большом экране видны история и сдача', (tester) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    await pumpAt(tester, const Size(420, 1000), settings: settings);
+    await pumpGame(
+      tester,
+      settings: settings,
+      state: calmPosition(),
+      size: const Size(420, 1000),
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.text('История'), findsOneWidget);
@@ -118,7 +96,12 @@ void main() {
   ) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    await pumpAt(tester, const Size(360, 400), settings: settings);
+    await pumpGame(
+      tester,
+      settings: settings,
+      state: calmPosition(),
+      size: const Size(360, 400),
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.byType(SingleChildScrollView), findsOneWidget);
@@ -140,13 +123,13 @@ void main() {
         code: 'ABC234',
       )
       ..peerName = 'Друг';
-    await pumpAt(
+    await pumpGame(
       tester,
-      const Size(400, 900),
       settings: settings,
+      state: calmPosition(turn: Side.black),
       mode: GameMode.network,
-      turn: Side.black,
       network: service,
+      size: const Size(400, 900),
     );
 
     expect(find.byKey(const Key('hint-button')), findsNothing);

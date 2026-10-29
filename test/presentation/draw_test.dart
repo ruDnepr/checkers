@@ -1,11 +1,9 @@
-import 'package:checkers_for_diana/application/game_controller.dart';
 import 'package:checkers_for_diana/application/settings.dart';
 import 'package:checkers_for_diana/domain/models.dart';
-import 'package:checkers_for_diana/presentation/board_game.dart';
-import 'package:checkers_for_diana/presentation/game_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/harness.dart';
 
 /// Two kings that do not see each other on any diagonal: no capture is
 /// possible, so they can walk in a circle and repeat the same position — the
@@ -42,54 +40,18 @@ GameState kingsOnlyPosition({int quietPlies = 59}) => GameState(
   quietPlies: quietPlies,
 );
 
-Future<GameController> pumpGame(
-  WidgetTester tester, {
-  required SettingsController settings,
-  required GameState state,
-}) async {
-  tester.view.physicalSize = const Size(400, 900);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(
-        home: GamePage(
-          settings: settings,
-          initialState: state,
-          animationPerLanding: const Duration(milliseconds: 20),
-          setup: GameSetup(
-            variant: state.variant,
-            mode: GameMode.local,
-            playerSide: Side.white,
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump(const Duration(milliseconds: 200));
-  return tester.widget<BoardView>(find.byType(BoardView)).controller;
-}
-
-Future<void> play(
-  WidgetTester tester,
-  GameController game,
-  Square from,
-  Square to,
-) async {
-  game.tap(from);
-  await tester.pump();
-  game.tap(to);
-  await tester.pump(const Duration(milliseconds: 60));
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('третье повторение позиции даёт ничью', (tester) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    final game = await pumpGame(tester, settings: settings, state: twoKings());
+    final game = await pumpGame(
+      tester,
+      settings: settings,
+      state: twoKings(),
+      size: const Size(400, 900),
+    );
 
     const circle = [
       [Square(5, 2), Square(4, 1)],
@@ -100,14 +62,14 @@ void main() {
 
     // One full circle brings the position back, but only twice: no draw yet.
     for (final step in circle) {
-      await play(tester, game, step.first, step.last);
+      await playMove(tester, game, step.first, step.last);
     }
     expect(game.state.ply, 4);
     expect(game.isDraw, isFalse);
     expect(game.winner, isNull);
 
     for (final step in circle) {
-      await play(tester, game, step.first, step.last);
+      await playMove(tester, game, step.first, step.last);
     }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -130,9 +92,10 @@ void main() {
       tester,
       settings: settings,
       state: quietPosition(),
+      size: const Size(400, 900),
     );
 
-    await play(tester, game, const Square(5, 2), const Square(4, 1));
+    await playMove(tester, game, const Square(5, 2), const Square(4, 1));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -149,9 +112,10 @@ void main() {
       tester,
       settings: settings,
       state: quietPosition(quietPlies: 28),
+      size: const Size(400, 900),
     );
 
-    await play(tester, game, const Square(5, 2), const Square(4, 1));
+    await playMove(tester, game, const Square(5, 2), const Square(4, 1));
 
     expect(game.state.quietPlies, 29);
     expect(game.quietLimit, 30);
@@ -171,6 +135,7 @@ void main() {
       tester,
       settings: settings,
       state: kingsOnlyPosition(quietPlies: 30),
+      size: const Size(400, 900),
     );
 
     expect(game.quietLimit, 60);
@@ -186,9 +151,10 @@ void main() {
       tester,
       settings: settings,
       state: kingsOnlyPosition(),
+      size: const Size(400, 900),
     );
 
-    await play(tester, game, const Square(5, 2), const Square(4, 1));
+    await playMove(tester, game, const Square(5, 2), const Square(4, 1));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -213,9 +179,10 @@ void main() {
         turn: Side.white,
         quietPlies: 25,
       ),
+      size: const Size(400, 900),
     );
 
-    await play(tester, game, const Square(5, 2), const Square(4, 3));
+    await playMove(tester, game, const Square(5, 2), const Square(4, 3));
 
     expect(game.state.quietPlies, 0);
     expect(game.isDraw, isFalse);

@@ -40,37 +40,20 @@ class MoveAnimation {
   final Duration duration;
 }
 
+/// Everything a search needs, so it can run in a separate isolate.
 class _SearchRequest {
-  const _SearchRequest(
-    this.state,
-    this.depth,
-    this.noise,
-    this.materialOnly, {
-    this.budgetMs = 0,
-    this.nodeBudget = 50000,
-  });
+  const _SearchRequest(this.state, this.depth, this.noise, this.materialOnly);
   final GameState state;
   final int depth;
   final bool noise;
   final bool materialOnly;
-
-  /// Wall-clock budget for the whole search. Above zero the search deepens
-  /// further while the budget lasts (used by the hint) instead of stopping at
-  /// exactly [depth].
-  final int budgetMs;
-  final int nodeBudget;
 }
 
-Move? _searchMove(_SearchRequest request) => CheckersAI(
-  nodeBudget: request.nodeBudget,
-).findBestMove(
+Move? _searchMove(_SearchRequest request) => CheckersAI().findBestMove(
   request.state,
   request.depth,
   easyNoise: request.noise,
   materialOnly: request.materialOnly,
-  budget: request.budgetMs > 0
-      ? Duration(milliseconds: request.budgetMs)
-      : null,
 );
 
 class GameController extends ChangeNotifier {
@@ -387,25 +370,13 @@ class GameController extends ChangeNotifier {
     notice = null;
     _notify();
     try {
-      // The hint deepens until the time budget is spent (up to six plies), so
-      // it sees the opponent's answer and the capture that follows it. The
-      // search runs in an isolate, therefore the wait never blocks the UI.
-      var move = await compute(
+      // Three plies: our move, the answer of the opponent and our reply. That
+      // is enough to see that a piece would be captured, and it is quick enough
+      // for a phone, so the child never waits for the hint. The search runs in
+      // an isolate, therefore the wait never blocks the UI.
+      final move = await compute(
         _searchMove,
-        _SearchRequest(
-          snapshot,
-          6,
-          false,
-          false,
-          budgetMs: 1200,
-          nodeBudget: 400000,
-        ),
-      );
-      // A slow device may not finish even the first pass in time; a plain
-      // two-ply search then answers, so the button never does nothing.
-      move ??= await compute(
-        _searchMove,
-        _SearchRequest(snapshot, 2, false, false),
+        _SearchRequest(snapshot, 3, false, false),
       );
       if (!_disposed &&
           move != null &&

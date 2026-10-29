@@ -1,11 +1,9 @@
-import 'package:checkers_for_diana/application/game_controller.dart';
 import 'package:checkers_for_diana/application/settings.dart';
 import 'package:checkers_for_diana/domain/models.dart';
-import 'package:checkers_for_diana/presentation/board_game.dart';
-import 'package:checkers_for_diana/presentation/game_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/harness.dart';
 
 /// A white man may take one black man and then a second one, so the series can
 /// be finished after the first capture — Russian rules allow that.
@@ -31,35 +29,6 @@ GameState kingMustContinue() => GameState(
   turn: Side.white,
 );
 
-Future<GameController> pumpGame(
-  WidgetTester tester, {
-  required SettingsController settings,
-  required GameState state,
-}) async {
-  tester.view.physicalSize = const Size(400, 1100);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(
-    ProviderScope(
-      child: MaterialApp(
-        home: GamePage(
-          settings: settings,
-          initialState: state,
-          animationPerLanding: const Duration(milliseconds: 30),
-          setup: GameSetup(
-            variant: state.variant,
-            mode: GameMode.local,
-            playerSide: Side.white,
-          ),
-        ),
-      ),
-    ),
-  );
-  await tester.pump(const Duration(milliseconds: 200));
-  return tester.widget<BoardView>(find.byType(BoardView)).controller;
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -68,7 +37,12 @@ void main() {
   ) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    final game = await pumpGame(tester, settings: settings, state: twoCaptures());
+    final game = await pumpGame(
+      tester,
+      settings: settings,
+      state: twoCaptures(),
+      size: const Size(400, 1100),
+    );
 
     game.tap(const Square(5, 0));
     await tester.pump();
@@ -94,7 +68,12 @@ void main() {
   testWidgets('второе взятие доигрывает серию как раньше', (tester) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    final game = await pumpGame(tester, settings: settings, state: twoCaptures());
+    final game = await pumpGame(
+      tester,
+      settings: settings,
+      state: twoCaptures(),
+      size: const Size(400, 1100),
+    );
 
     game.tap(const Square(5, 0));
     await tester.pump();
@@ -115,6 +94,7 @@ void main() {
       tester,
       settings: settings,
       state: kingMustContinue(),
+      size: const Size(400, 1100),
     );
 
     game.tap(const Square(7, 0));
@@ -137,7 +117,12 @@ void main() {
   ) async {
     final settings = SettingsController()..sound = false;
     addTearDown(settings.dispose);
-    final game = await pumpGame(tester, settings: settings, state: twoCaptures());
+    final game = await pumpGame(
+      tester,
+      settings: settings,
+      state: twoCaptures(),
+      size: const Size(400, 1100),
+    );
 
     expect(find.byKey(const Key('hint-button')), findsOneWidget);
 
