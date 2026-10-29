@@ -18,11 +18,27 @@ GameState hangingMan() => position(GameVariant.russian, {
   const Square(3, 0): const Piece(Side.black),
 });
 
-/// True when the side that is to move in [state] can capture something.
-bool hasCapture(GameState state) =>
-    (GameRules.forVariant(state.variant) as StandardRules).legalMoves(
-      state,
-    ).any((move) => move.isCapture);
+/// Material weight of one side: a man is one, a king is three.
+int material(GameState state, Side side) => state.board.pieces.entries
+    .where((entry) => entry.value.side == side)
+    .fold(0, (sum, entry) => sum + (entry.value.king ? 3 : 1));
+
+/// Material balance of [side] once every capture that the rules force has been
+/// played out. A capture is obligatory in both variants, so the balance right
+/// after a move says nothing: the piece is only as good as taken. The side that
+/// is being hit picks the worst line for [side], [side] the best of its own
+/// forced recaptures.
+int balanceAfterCaptures(StandardRules rules, GameState state, Side side) {
+  final captures = rules.legalMoves(state).where((move) => move.isCapture);
+  if (captures.isEmpty) {
+    return material(state, side) - material(state, side.opponent);
+  }
+  final values = [
+    for (final move in captures)
+      balanceAfterCaptures(rules, rules.applyKnownLegal(state, move), side),
+  ];
+  return state.turn == side ? values.reduce(max) : values.reduce(min);
+}
 
 void main() {
   test('находит победу за один полный ход', () {
@@ -56,24 +72,34 @@ void main() {
     );
   });
 
-  test('подсказка глубины 3 не ставит шашки под бой в начале партии', () {
-    // The situation reported from the phone: right after the first moves the
-    // hint suggested pieces that were captured at once. With a finished
-    // three-ply search the answer of the opponent is always evaluated. In the
-    // quiet opening no pieces touch each other, so any capture available to the
-    // opponent right after the suggested move is a piece given away for free.
+  test('подсказка глубины 3 не ставит шашку под бой', () {
+    expect(
+      CheckersAI(random: Random(1)).findBestMove(hangingMan(), 3)!.to,
+      const Square(4, 3),
+    );
+  });
+
+  test('подсказка не теряет материал в начале партии', () {
+    // The situation reported from the phone: the hint offered a piece that was
+    // taken at once. Only the balance after the obligatory captures tells
+    // whether a move really gives something away: an even exchange right after
+    // the move is normal play, a lost man is not.
     for (final variant in [GameVariant.russian, GameVariant.american]) {
       var state = GameState.initial(variant);
       final rules = GameRules.forVariant(variant) as StandardRules;
+      final ai = CheckersAI(random: Random(1));
       for (var ply = 0; ply < 4; ply++) {
-        final move = CheckersAI().findBestMove(state, 3);
+        final mover = state.turn;
+        final before = material(state, mover) - material(state, mover.opponent);
+        final move = ai.findBestMove(state, 3);
         expect(move, isNotNull, reason: '${variant.name}/$ply');
-        state = rules.applyKnownLegal(state, move!);
+        final after = rules.applyKnownLegal(state, move!);
         expect(
-          hasCapture(state),
-          isFalse,
-          reason: '${variant.name}: ход $move на полуходе $ply отдаёт шашку',
+          balanceAfterCaptures(rules, after, mover),
+          greaterThanOrEqualTo(before),
+          reason: '${variant.name}: ход $move на полуходе $ply теряет материал',
         );
+        state = after;
       }
     }
   });
