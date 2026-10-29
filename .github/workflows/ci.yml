@@ -77,17 +77,31 @@ jobs:
           cat /tmp/tests.txt
           if [ -n "$status" ]; then
             python3 - <<'PY'
+          import re
           from pathlib import Path
 
-          text = Path('/tmp/tests.txt').read_text()
-          blocks = [
-              'EXCEPTION CAUGHT' + b
-              for b in text.split('EXCEPTION CAUGHT')[1:]
-          ] or [text[-3900:]]
-          for block in blocks[:8]:
+          lines = Path('/tmp/tests.txt').read_text().splitlines()
+          # A failing test is marked with [E]; its details run up to the next
+          # progress line. Without this the annotation kept only the tail of the
+          # run and the name of the broken test was lost.
+          progress = re.compile(r'^\d{2}:\d{2} ')
+          blocks = []
+          for index, line in enumerate(lines):
+              if '[E]' not in line:
+                  continue
+              block = [line]
+              for following in lines[index + 1:]:
+                  if progress.match(following):
+                      break
+                  block.append(following)
+              blocks.append('\n'.join(block[:40]))
+          if not blocks:
+              blocks = ['\n'.join(lines[-60:])]
+          for number, block in enumerate(blocks[:6]):
               print(
-                  '::error title=test-output::'
-                  + block[:3900].replace('%', '%25').replace('\n', '%0A')
+                  f'::error title=failed-test-{number}::'
+                  + block[:3900].replace('%', '%25')
+                  .replace('\n', '%0A').replace('\r', '%0D')
               )
           PY
           fi
