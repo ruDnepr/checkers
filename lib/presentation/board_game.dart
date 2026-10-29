@@ -282,26 +282,37 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
           const [0, .55, 1],
         ),
     );
-    // Kings get a bright ridge. On a light (white) piece the golden ring alone
-    // did not stand out, so it is paired with a dark inner outline.
-    canvas.drawCircle(
-      center,
-      radius * .74,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(1.0, cell * (piece.king ? .075 : .035))
-        ..color = piece.king
-            ? (dark ? const Color(0xFFFFDB6C) : const Color(0xFFE09A18))
-            : (dark ? const Color(0xFF73717A) : const Color(0xFFD5C3A0)),
-    );
-    if (piece.king && !dark) {
+    // Kings get a bright ridge. A small golden ring alone was hard to see on a
+    // pale (white) piece, so it is drawn as a dark band with a golden line on
+    // top. Black kings keep the original golden ring.
+    final king = piece.king;
+    if (king && !dark) {
       canvas.drawCircle(
         center,
         radius * .74,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(1.0, cell * .018)
-          ..color = const Color(0xFF5A3A05),
+          ..strokeWidth = math.max(1.0, cell * .078)
+          ..color = const Color(0xFF4A2F04),
+      );
+      canvas.drawCircle(
+        center,
+        radius * .74,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, cell * .042)
+          ..color = const Color(0xFFF7B722),
+      );
+    } else {
+      canvas.drawCircle(
+        center,
+        radius * .74,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = math.max(1.0, cell * .035)
+          ..color = king
+              ? const Color(0xFFFFDB6C)
+              : (dark ? const Color(0xFF73717A) : const Color(0xFFD5C3A0)),
       );
     }
     canvas.drawArc(
@@ -329,17 +340,19 @@ class _BoardComponent extends PositionComponent with RiverpodComponentMixin {
       }
       star.close();
       // A dark outline keeps the golden star readable on the light piece.
+      if (!dark) {
+        canvas.drawPath(
+          star,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = math.max(1.0, cell * .03)
+            ..strokeJoin = StrokeJoin.round
+            ..color = const Color(0xFF4A2F04),
+        );
+      }
       canvas.drawPath(
         star,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(1.0, cell * .028)
-          ..strokeJoin = StrokeJoin.round
-          ..color = const Color(0xFF6B4408),
-      );
-      canvas.drawPath(
-        star,
-        Paint()..color = dark ? const Color(0xFFF4C755) : const Color(0xFFEB9D0B),
+        Paint()..color = dark ? const Color(0xFFF4C755) : const Color(0xFFF2AE12),
       );
     }
     canvas.restore();
