@@ -548,37 +548,42 @@ class _SettingsSwitch extends StatelessWidget {
   final String title, subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
+
+  // A Material, not a decorated Container: a ListTile paints its background and
+  // ink splashes on the nearest Material, so a coloured box in between hides
+  // them — Flutter asserts about exactly that in debug builds.
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 12),
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(22),
-    ),
-    child: SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: purple,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      secondary: Container(
-        width: 46,
-        height: 46,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1EAFB),
-          borderRadius: BorderRadius.circular(15),
+      clipBehavior: Clip.antiAlias,
+      child: SwitchListTile(
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: purple,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        secondary: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1EAFB),
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Icon(icon, color: purple),
         ),
-        child: Icon(icon, color: purple),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(
-          color: muted,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     ),
