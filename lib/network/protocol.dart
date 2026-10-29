@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import '../domain/models.dart';
 
-const protocolVersion = 1;
+// v2: a man in Russian draughts and giveaway may now stop a capture series
+// early, so the legal moves of two different versions can disagree. Peers with
+// another version refuse the game instead of desynchronising mid-game.
+const protocolVersion = 2;
 const serviceType = '_diana-checkers._tcp';
 const codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 final _codePattern = RegExp(r'^[A-HJ-NP-Z2-9]{6}$');

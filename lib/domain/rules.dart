@@ -5,6 +5,13 @@ import 'models.dart';
 /// Pure move generation. Captured pieces remain blockers until the whole jump
 /// ends; a man in Russian/giveaway crowns immediately, in international only
 /// at the end, and in American crowning ends the turn.
+///
+/// Capture series differ per variant:
+/// * Russian/giveaway — a man may stop after any completed series, a king must
+///   finish the series it starts (turning inside a series is allowed);
+/// * classic/American — every series is played to the end for all pieces;
+/// * international — only series with the maximal number of captured pieces.
+/// Maximum capture is *not* universal: it applies to international only.
 abstract interface class GameRules {
   GameVariant get variant;
   List<Move> legalMoves(GameState state);
@@ -45,9 +52,12 @@ class StandardRules implements GameRules {
       );
     }
     if (captures.isNotEmpty) {
-      if (!variant.maximumCapture) return captures;
-      final maximum = captures.map((m) => m.captures.length).reduce(math.max);
-      return captures.where((move) => move.captures.length == maximum).toList();
+      // A man in Russian/giveaway may stop the series early, so the same move
+      // can be produced twice; keep the first occurrence of every move.
+      final unique = captures.toSet().toList();
+      if (!variant.maximumCapture) return unique;
+      final maximum = unique.map((m) => m.captures.length).reduce(math.max);
+      return unique.where((move) => move.captures.length == maximum).toList();
     }
 
     final moves = <Move>[];
@@ -136,6 +146,14 @@ class StandardRules implements GameRules {
             nextTaken,
             result,
           );
+          // Russian/giveaway: a man may choose any series and stop after it,
+          // even when a longer series exists. A piece that was crowned on this
+          // landing is a king already, so it must continue and is not added.
+          if (_manMayStopMidSeries(nextPiece)) {
+            result.add(
+              Move(from: origin, landings: nextPath, captures: nextTaken),
+            );
+          }
         }
         if (!piece.king || !variant.flyingKings) break;
         row += dr;
@@ -146,6 +164,16 @@ class StandardRules implements GameRules {
       result.add(Move(from: origin, landings: path, captures: taken));
     }
   }
+
+  /// Whether the pieces may end a capture series in the middle.
+  ///
+  /// Russian draughts and giveaway: a man chooses any series and may stop after
+  /// it, while a king must finish every series it starts. Classic/American and
+  /// international: every started series is played to the end, so stopping is
+  /// never allowed. International additionally keeps only maximal series.
+  bool _manMayStopMidSeries(Piece piece) =>
+      (variant == GameVariant.russian || variant == GameVariant.giveaway) &&
+      !piece.king;
 
   bool _isCrownRow(Square square, Side side, int size) =>
       square.row == (side == Side.white ? 0 : size - 1);

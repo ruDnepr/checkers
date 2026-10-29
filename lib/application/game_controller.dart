@@ -163,6 +163,26 @@ class GameController extends ChangeNotifier {
       .map((m) => m.landings[_prefix.length])
       .toSet();
 
+  /// The series played so far can already be finished here, while a longer one
+  /// is still available. Only Russian/giveaway allow this for a man.
+  Move? get _stopHere => _prefix.isEmpty
+      ? null
+      : selectedCandidates
+            .where((m) => m.landings.length == _prefix.length)
+            .firstOrNull;
+  bool get canFinishCapture =>
+      _stopHere != null && suggestedDestinations.isNotEmpty;
+
+  /// Ends the capture series at the landings already played.
+  void finishCapture() {
+    if (!canInteract) return;
+    final move = _stopHere;
+    if (move == null) return;
+    _clearSelection();
+    notice = null;
+    unawaited(_apply(move, remote: false));
+  }
+
   void start() {
     if (_started) return;
     _started = true;
@@ -271,7 +291,9 @@ class GameController extends ChangeNotifier {
       final completed = next
           .where((m) => m.landings.length == _prefix.length)
           .firstOrNull;
-      if (completed != null) {
+      // When the series could also be continued, the player decides: tapping
+      // the next landing plays on, «Закончить бой» stops here.
+      if (completed != null && !canFinishCapture) {
         _clearSelection();
         unawaited(_apply(completed, remote: false));
       } else {
@@ -279,9 +301,13 @@ class GameController extends ChangeNotifier {
       }
       return;
     }
-    // Once a chain has begun it cannot be abandoned or switched to another piece.
+    // A started series must be finished by the same piece; in Russian/giveaway
+    // a man may also end it where it is with the «Закончить бой» button.
     if (_prefix.isNotEmpty) {
-      notice = 'Серия взятий уже начата — закончи её этой же шашкой.';
+      notice = canFinishCapture
+          ? 'Можно закончить бой здесь — нажми «Закончить бой», '
+                'или продолжай бить этой шашкой.'
+          : 'Серия взятий уже начата — закончи её этой же шашкой.';
       _notify();
       return;
     }
