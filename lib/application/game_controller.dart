@@ -192,7 +192,7 @@ class GameController extends ChangeNotifier {
     if (hasCapture) {
       buffer.write(
         setup.variant == GameVariant.international
-            ? '. Бить нужно как можно больше шашек: ${maximumCapture}'
+            ? '. Бить нужно как можно больше шашек: $maximumCapture'
             : '. Сейчас бой обязателен',
       );
     }
@@ -311,6 +311,7 @@ class GameController extends ChangeNotifier {
         _SearchRequest(snapshot, 2, false, false),
       );
       if (!_disposed &&
+          move != null &&
           generation == _generation &&
           snapshot.fingerprint == state.fingerprint &&
           settings.hints) {
